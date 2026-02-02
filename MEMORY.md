@@ -21,7 +21,7 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - **We are money-constrained** — be mindful of API costs
 - **Gemini CLI is free** (up to quota limits) — use it for grunt work
 - **Preferred pattern:** Claude orchestrates, Gemini CLI does heavy lifting (coding, generation, etc.)
-- Command: `GEMINI_API_KEY="AIzaSyAX18rImRKfVEIjUymrirhM849zXOG-3cI" gemini -p "prompt"`
+- Command: `GEMINI_API_KEY="$GEMINI_API_KEY (see .env)" gemini -p "prompt"`
 - If Gemini quota is hit, fall back to doing it myself but note the cost tradeoff
 - **Future consideration:** Add Chinese APIs (DeepSeek, Qwen) for cheap summarization/grunt work
 - **Keep Opus as main engine** — Jason values the personality and intelligence, don't downgrade the core

@@ -1,0 +1,378 @@
+#!/usr/bin/env node
+/**
+ * Research helper - fetches URLs and summarizes using Gemini (free) or DeepSeek (cheap)
+ * 
+ * Usage:
+ *   node tools/research.js -q "question" url1 url2 url3
+ *   node tools/research.js -q "question" -f urls.txt
+ *   node tools/research.js --deepseek -q "question" url1  # Force DeepSeek
+ * 
+ * The script:
+ * 1. Fetches each URL (with content limits)
+ * 2. Sends all content to Gemini/DeepSeek with the research question
+ * 3. Returns a structured summary
+ * 
+ * Token-efficient: Opus plans, cheap models fetch & summarize
+ */
+
+const https = require('https');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { JSDOM } = require('jsdom');
+const { Readability } = require('@mozilla/readability');
+
+// Load .env
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+// API Keys (from environment)
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY;
+
+if (!GEMINI_KEY && !DEEPSEEK_KEY) {
+  console.error('Error: No API keys found. Set GEMINI_API_KEY or DEEPSEEK_API_KEY in .env');
+  process.exit(1);
+}
+
+// Config
+const MAX_CHARS_PER_PAGE = 4000;
+const MAX_TOTAL_CHARS = 20000;
+const FETCH_TIMEOUT = 10000;
+
+// Fetch URL content
+async function fetchUrl(url) {
+  return new Promise((resolve) => {
+    const protocol = url.startsWith('https') ? https : http;
+    const timeout = setTimeout(() => resolve({ url, error: 'Timeout' }), FETCH_TIMEOUT);
+    
+    const req = protocol.get(url, { 
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (compatible; ResearchBot/1.0)',
+        'Accept': 'text/html,application/xhtml+xml'
+      }
+    }, (res) => {
+      // Handle redirects
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        clearTimeout(timeout);
+        const newUrl = new URL(res.headers.location, url).href;
+        resolve(fetchUrl(newUrl));
+        return;
+      }
+      
+      if (res.statusCode !== 200) {
+        clearTimeout(timeout);
+        resolve({ url, error: `HTTP ${res.statusCode}` });
+        return;
+      }
+      
+      let data = '';
+      res.on('data', chunk => {
+        data += chunk;
+        if (data.length > 500000) res.destroy(); // Limit raw HTML
+      });
+      res.on('end', () => {
+        clearTimeout(timeout);
+        resolve({ url, html: data });
+      });
+    });
+    
+    req.on('error', (e) => {
+      clearTimeout(timeout);
+      resolve({ url, error: e.message });
+    });
+  });
+}
+
+// Extract readable content from HTML
+function extractContent(html, url) {
+  try {
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+    
+    if (article && article.textContent) {
+      let content = article.textContent
+        .replace(/\s+/g, ' ')
+        .replace(/\n\s*\n/g, '\n\n')
+        .trim();
+      
+      if (content.length > MAX_CHARS_PER_PAGE) {
+        content = content.slice(0, MAX_CHARS_PER_PAGE) + '... [truncated]';
+      }
+      
+      return {
+        title: article.title || 'Untitled',
+        content
+      };
+    }
+  } catch (e) {}
+  
+  // Fallback: basic text extraction
+  const text = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_CHARS_PER_PAGE);
+  
+  return { title: 'Untitled', content: text };
+}
+
+// Call Gemini
+async function callGemini(prompt) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 2048 }
+    });
+
+    const req = https.request({
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.error) {
+            // Check if it's a quota error
+            if (json.error.code === 429 || json.error.message?.includes('quota')) {
+              reject(new Error('QUOTA_EXCEEDED'));
+            } else {
+              reject(new Error(json.error.message));
+            }
+          } else if (json.candidates && json.candidates[0]) {
+            resolve(json.candidates[0].content.parts[0].text);
+          } else {
+            reject(new Error('No response from Gemini'));
+          }
+        } catch(e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// Call DeepSeek
+async function callDeepSeek(prompt) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: 'You are a research assistant. Analyze the provided sources and answer the question. Be thorough but concise. Cite sources when making claims.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2048
+    });
+
+    const req = https.request({
+      hostname: 'api.deepseek.com',
+      path: '/chat/completions',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.error) reject(new Error(json.error.message));
+          else resolve(json.choices[0].message.content);
+        } catch(e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// Main
+async function main() {
+  const args = process.argv.slice(2);
+  
+  let question = '';
+  let urls = [];
+  let forceDeepSeek = false;
+  let urlFile = null;
+  
+  // Parse args
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '-q' || args[i] === '--question') {
+      question = args[++i];
+    } else if (args[i] === '-f' || args[i] === '--file') {
+      urlFile = args[++i];
+    } else if (args[i] === '--deepseek' || args[i] === '-d') {
+      forceDeepSeek = true;
+    } else if (args[i] === '-h' || args[i] === '--help') {
+      console.log(`
+Research Helper - Fetch and summarize URLs using Gemini/DeepSeek
+
+Usage:
+  node research.js -q "question" url1 url2 url3
+  node research.js -q "question" -f urls.txt
+  node research.js --deepseek -q "question" url1
+
+Options:
+  -q, --question   Research question (required)
+  -f, --file       File containing URLs (one per line)
+  -d, --deepseek   Force DeepSeek (skip Gemini)
+  -h, --help       Show this help
+
+The script fetches URLs, extracts content, and summarizes using:
+1. Gemini (free) - primary
+2. DeepSeek (cheap) - fallback if Gemini quota exceeded
+
+Max ${MAX_CHARS_PER_PAGE} chars per page, ${MAX_TOTAL_CHARS} total.
+`);
+      process.exit(0);
+    } else if (args[i].startsWith('http')) {
+      urls.push(args[i]);
+    }
+  }
+  
+  // Load URLs from file if specified
+  if (urlFile && fs.existsSync(urlFile)) {
+    const fileUrls = fs.readFileSync(urlFile, 'utf8')
+      .split('\n')
+      .map(u => u.trim())
+      .filter(u => u.startsWith('http'));
+    urls = [...urls, ...fileUrls];
+  }
+  
+  if (!question) {
+    console.error('Error: Question required. Use -q "your question"');
+    process.exit(1);
+  }
+  
+  if (urls.length === 0) {
+    console.error('Error: No URLs provided');
+    process.exit(1);
+  }
+  
+  console.error(`[Research] Fetching ${urls.length} URL(s)...`);
+  
+  // Fetch all URLs in parallel
+  const results = await Promise.all(urls.map(fetchUrl));
+  
+  // Extract content
+  let sources = [];
+  let totalChars = 0;
+  
+  for (const result of results) {
+    if (result.error) {
+      console.error(`  ✗ ${result.url}: ${result.error}`);
+      continue;
+    }
+    
+    const extracted = extractContent(result.html, result.url);
+    if (extracted.content.length < 100) {
+      console.error(`  ✗ ${result.url}: Too little content`);
+      continue;
+    }
+    
+    // Check total limit
+    if (totalChars + extracted.content.length > MAX_TOTAL_CHARS) {
+      const remaining = MAX_TOTAL_CHARS - totalChars;
+      if (remaining > 500) {
+        extracted.content = extracted.content.slice(0, remaining) + '... [truncated]';
+      } else {
+        console.error(`  ⚠ ${result.url}: Skipped (total limit reached)`);
+        continue;
+      }
+    }
+    
+    sources.push({
+      url: result.url,
+      title: extracted.title,
+      content: extracted.content
+    });
+    totalChars += extracted.content.length;
+    console.error(`  ✓ ${result.url} (${extracted.content.length} chars)`);
+  }
+  
+  if (sources.length === 0) {
+    console.error('Error: No content could be extracted from any URL');
+    process.exit(1);
+  }
+  
+  // Build prompt
+  const sourcesText = sources.map((s, i) => 
+    `[Source ${i + 1}] ${s.title}\nURL: ${s.url}\n\n${s.content}`
+  ).join('\n\n---\n\n');
+  
+  const prompt = `Research Question: ${question}
+
+I have gathered the following sources. Please analyze them and provide a comprehensive answer to the research question.
+
+Structure your response as:
+1. **Summary** - Direct answer to the question (2-3 sentences)
+2. **Key Findings** - Main points from the sources (bullet points)
+3. **Details** - Deeper analysis if relevant
+4. **Sources Used** - Which sources were most useful
+
+---
+
+${sourcesText}`;
+
+  console.error(`[Research] Summarizing ${sources.length} source(s) (${totalChars} chars)...`);
+  
+  // Try Gemini first, fall back to DeepSeek
+  let result;
+  let provider;
+  
+  if (!forceDeepSeek) {
+    try {
+      console.error('[Research] Using Gemini...');
+      result = await callGemini(prompt);
+      provider = 'Gemini';
+    } catch (e) {
+      if (e.message === 'QUOTA_EXCEEDED') {
+        console.error('[Research] Gemini quota exceeded, falling back to DeepSeek...');
+      } else {
+        console.error(`[Research] Gemini failed: ${e.message}, falling back to DeepSeek...`);
+      }
+    }
+  }
+  
+  if (!result) {
+    try {
+      console.error('[Research] Using DeepSeek...');
+      result = await callDeepSeek(prompt);
+      provider = 'DeepSeek';
+    } catch (e) {
+      console.error(`[Research] DeepSeek failed: ${e.message}`);
+      process.exit(1);
+    }
+  }
+  
+  console.error(`[Research] Done (${provider})\n`);
+  console.log(result);
+}
+
+// Check for required dependencies
+try {
+  require('jsdom');
+  require('@mozilla/readability');
+} catch (e) {
+  console.error('Installing required dependencies...');
+  require('child_process').execSync('npm install jsdom @mozilla/readability', { 
+    stdio: 'inherit',
+    cwd: __dirname 
+  });
+}
+
+main().catch(e => {
+  console.error('Error:', e.message);
+  process.exit(1);
+});

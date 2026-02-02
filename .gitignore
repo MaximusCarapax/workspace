@@ -8,7 +8,7 @@ node_modules/
 credentials.json
 secrets/
 .env
-.env.*
+!.env.example
 
 # OpenClaw internals
 sessions/

@@ -41,7 +41,7 @@ Edge TTS available (free, no API key needed)
 ## Gemini CLI (FREE - FIRST CHOICE)
 Installed and configured for coding tasks:
 ```bash
-GEMINI_API_KEY="AIzaSyAX18rImRKfVEIjUymrirhM849zXOG-3cI" gemini -p "your prompt here"
+GEMINI_API_KEY="$GEMINI_API_KEY (see .env)" gemini -p "your prompt here"
 ```
 - **Cost:** FREE (up to quota limits)
 - **Use for:** Heavy coding tasks, generation, anything that would burn Claude tokens
