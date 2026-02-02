@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "id": "C001",
+      "content": "The future of AI assistants is proactive, not reactive. They should anticipate needs, not wait for commands. linkedin",
+      "platform": "linkedin",
+      "status": "draft",
+      "createdAt": "2026-02-02T01:20:09.936Z",
+      "updatedAt": "2026-02-02T01:20:25.696Z",
+      "scheduledFor": null,
+      "publishedAt": null,
+      "notes": "Expand with examples of proactive AI behaviors",
+      "tags": []
+    },
+    {
+      "id": "C002",
+      "content": "Hot take: Most people use AI wrong. They ask it to do tasks. The real power is using it to think differently. both",
+      "platform": "both",
+      "status": "idea",
+      "createdAt": "2026-02-02T01:20:14.670Z",
+      "updatedAt": "2026-02-02T01:20:14.671Z",
+      "scheduledFor": null,
+      "publishedAt": null,
+      "notes": "",
+      "tags": []
+    },
+    {
+      "id": "C003",
+      "content": "Building in public with an AI co-founder. Week 1 learnings. x",
+      "platform": "x",
+      "status": "idea",
+      "createdAt": "2026-02-02T01:20:14.713Z",
+      "updatedAt": "2026-02-02T01:20:14.713Z",
+      "scheduledFor": null,
+      "publishedAt": null,
+      "notes": "",
+      "tags": []
+    }
+  ],
+  "lastId": 3
+}
