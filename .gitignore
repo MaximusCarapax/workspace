@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Secrets - NEVER COMMIT
+*.secret
+*.key
+credentials.json
+secrets/
+.env
+.env.*
+
+# OpenClaw internals
+sessions/
+*.log
+/tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts
+dist/
+build/
+*.tgz
+
+# Temporary
+*.tmp
+*.bak
