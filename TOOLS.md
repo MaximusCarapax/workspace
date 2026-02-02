@@ -47,14 +47,20 @@ GEMINI_API_KEY="AIzaSyAX18rImRKfVEIjUymrirhM849zXOG-3cI" gemini -p "your prompt 
 - **Use for:** Heavy coding tasks, generation, anything that would burn Claude tokens
 - **Fallback:** If quota hit, use DeepSeek
 
-## DeepSeek CLI (CHEAP BACKUP)
+## Aider + DeepSeek (PRIMARY CODING TOOL)
+```bash
+cd /home/node/.openclaw/workspace
+aider --model deepseek/deepseek-chat [files...]
+```
+- **Cost:** ~$0.14 per million tokens (basically free)
+- **Use for:** All coding tasks — git-aware, multi-file edits
+- **Why:** Proper CLI tool, consistent workflow, auto-commits
+
+### Legacy: DeepSeek direct
 ```bash
 node tools/deepseek.js "your prompt here"
 node tools/deepseek.js -c "coding prompt"  # uses deepseek-coder model
 ```
-- **Cost:** ~$0.14 per million input tokens (basically nothing)
-- **Use for:** Coding, summarization, grunt work when Gemini quota is hit
-- **Models:** `deepseek-chat` (default), `deepseek-coder` (use -c flag)
 
 ## Research Helper 🔍
 Token-efficient research: I plan, cheap models fetch & summarize.
