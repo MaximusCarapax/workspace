@@ -12,7 +12,13 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "jsdom": "^27.4.0",
-    "otpauth": "^9.4.1"
+    "otpauth": "^9.4.1",
+    "playwright": "^1.58.1",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "twilio": "^5.12.0",
+    "twitter-api-v2": "^1.29.0"
   }
 }

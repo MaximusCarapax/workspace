@@ -6,6 +6,34 @@
 - Trial account ($15.50 credit)
 - Can send SMS, receive SMS (needs webhook setup)
 
+### Voice Calls (Outbound)
+```bash
+node tools/voice-call.js call <number> "message"    # Make call with TTS
+node tools/voice-call.js call +15551234567 "Hello!" --voice Polly.Matthew
+node tools/voice-call.js status <callSid>           # Check call status
+node tools/voice-call.js test                       # Test credentials
+```
+- Uses Twilio TTS (Polly voices)
+- Supports multiple voices: Polly.Joanna, Polly.Matthew, Polly.Amy, etc.
+
+### Voice Webhook Server (Inbound)
+```bash
+node tools/twilio-webhook-server.js [port]   # Default: 3000
+```
+- POST /voice/incoming - Handle incoming calls
+- POST /voice/recording - Recording callbacks
+- GET /health - Health check
+
+**Setup for inbound calls:**
+1. Run: `node tools/twilio-webhook-server.js 3000`
+2. Expose via ngrok: `ngrok http 3000`
+3. Configure Twilio: Voice > Webhook > https://xxx.ngrok.io/voice/incoming
+
+**Credentials:** ~/.openclaw/secrets/credentials.json
+- twilio_account_sid
+- twilio_auth_token
+- twilio_phone_number
+
 ## TOTP Manager
 Generate 2FA codes independently without phone/app:
 ```bash
@@ -27,6 +55,35 @@ node tools/gmail.js label <id> <name>  # Add label
 node tools/gmail.js draft <to> <subj> <body>  # Create draft (Jason sends)
 ```
 
+## Google Calendar 📅
+Connected to **jason.x.wu.27@gmail.com** (read-only)
+```bash
+node tools/google-calendar.js today              # Today's events
+node tools/google-calendar.js tomorrow           # Tomorrow's events
+node tools/google-calendar.js week               # Next 7 days
+node tools/google-calendar.js date <YYYY-MM-DD>  # Specific date
+```
+- Uses same OAuth credentials as Gmail
+- Requires Calendar API enabled in Google Cloud Console
+
+## OpenRouter API
+Fallback for Gemini + image generation.
+- **API Key:** In `~/.openclaw/secrets/openrouter.json`
+- **Fee:** 5.5% on credit purchases (pass-through pricing on models)
+- **Use for:** Gemini fallback, image generation, access to other models
+
+### Image Generation
+```bash
+node tools/image-gen.js "your prompt"
+node tools/image-gen.js "prompt" --model flash   # cheaper for bulk
+node tools/image-gen.js "prompt" --output out.png
+```
+**Models:**
+- `gpt` — GPT-5 Image (default, best quality for socials)
+- `gpt-mini` — GPT-5 Image Mini (good quality, cheaper)
+- `pro` — Gemini 3 Pro Image (great quality ~$2/M)
+- `flash` — Gemini 2.5 Flash Image (cheapest ~$0.30/M, for bulk)
+
 ## Web Search
 Brave API configured and working. Use `web_search` tool directly.
 
@@ -37,6 +94,19 @@ Headless Chromium available via `browser` tool, profile: `openclaw`
 
 ## TTS
 Edge TTS available (free, no API key needed)
+
+## CAPTCHA Solver (2Captcha)
+Bypass CAPTCHAs for automated signups and form submissions:
+```bash
+node tools/captcha-solver.js balance              # Check balance
+node tools/captcha-solver.js test                 # Test on demo page
+node tools/captcha-solver.js solve <sitekey> <url>  # Solve reCAPTCHA
+node tools/captcha-solver.js solve <sitekey> <url> --hcaptcha  # Solve hCaptcha
+```
+- **Cost:** ~$0.003 per solve (~$3/1000 CAPTCHAs)
+- **Balance:** $3.00 (as of 2026-02-03)
+- **Account:** maximuscarapax@gmail.com
+- Can be imported and used in other scripts via `require('./captcha-solver.js')`
 
 ## Gemini CLI (FREE - FIRST CHOICE)
 Custom wrapper with rate-limit handling:
@@ -177,9 +247,14 @@ node tools/x-post.js test "text"                # Dry run
 
 **Monitoring (tools/x-mentions.js):**
 ```bash
-node tools/x-mentions.js check                  # Check for new mentions
+node tools/x-mentions.js check                  # Check for new mentions (Bird → API fallback)
+node tools/x-mentions.js check --all            # Show all recent mentions
 node tools/x-mentions.js reply <id> "text"      # Reply to mention
+node tools/x-mentions.js history                # Show mention history
+node tools/x-mentions.js clear                  # Clear seen mentions
 ```
+
+**Strategy:** Bird CLI (free) → X API fallback (100 reads/month shared quota)
 
 **Limits (Free Tier):**
 - 500 posts/month
@@ -205,3 +280,20 @@ node tools/linear.js search "query"          # Search issues
 ---
 
 *Add more as I discover what's available.*
+
+
+## ElevenLabs Voice Agent (Conversational AI)
+**Agent:** agent_5101kghqpcgsfpfs9r4s1q43thza
+**Phone:** +1 (820) 900-4002
+**Voice:** Roger (laid-back, casual)
+
+### Outbound Calls
+```bash
+node tools/voice-agent-call.js <number> <name> [context]     # Call + auto-report
+node tools/voice-agent-call.js --no-watch <number> <name>    # Just initiate
+node tools/voice-agent-call.js report <conversation_id>      # Get report
+node tools/voice-agent-call.js list                          # Recent calls
+```
+
+**Auto-report:** By default, waits for call to complete and posts full transcript + outcome.
+

@@ -187,6 +187,47 @@ async function createDraft(to, subject, body) {
   });
 }
 
+// Gmail label colors (background, text)
+const LABEL_COLORS = {
+  red:    { backgroundColor: '#fb4c2f', textColor: '#ffffff' },
+  orange: { backgroundColor: '#ffad47', textColor: '#ffffff' },
+  yellow: { backgroundColor: '#fad165', textColor: '#000000' },
+  green:  { backgroundColor: '#16a766', textColor: '#ffffff' },
+  blue:   { backgroundColor: '#4986e7', textColor: '#ffffff' },
+  purple: { backgroundColor: '#a479e2', textColor: '#ffffff' },
+  gray:   { backgroundColor: '#999999', textColor: '#ffffff' },
+};
+
+async function createLabel(name, color = null) {
+  const body = {
+    name,
+    labelListVisibility: 'labelShow',
+    messageListVisibility: 'show'
+  };
+  
+  if (color && LABEL_COLORS[color]) {
+    body.color = LABEL_COLORS[color];
+  }
+  
+  return gmailAPI('POST', '/labels', body);
+}
+
+async function deleteLabel(labelName) {
+  const labels = await gmailAPI('GET', '/labels');
+  const label = labels.labels.find(l => l.name.toLowerCase() === labelName.toLowerCase());
+  if (!label) throw new Error(`Label "${labelName}" not found`);
+  
+  return gmailAPI('DELETE', `/labels/${label.id}`);
+}
+
+async function trashMessage(id) {
+  return gmailAPI('POST', `/messages/${id}/trash`);
+}
+
+async function deleteMessage(id) {
+  return gmailAPI('DELETE', `/messages/${id}`);
+}
+
 async function main() {
   const [,, cmd, ...args] = process.argv;
 
@@ -296,19 +337,59 @@ async function main() {
         break;
       }
 
+      case 'create-label': {
+        const [name, color] = args;
+        if (!name) { console.log('Usage: node gmail.js create-label <name> [color]'); return; }
+        if (color && !LABEL_COLORS[color]) {
+          console.log(`Available colors: ${Object.keys(LABEL_COLORS).join(', ')}`);
+          return;
+        }
+        const result = await createLabel(name, color);
+        console.log(`✓ Created label "${name}"${color ? ` (${color})` : ''}`);
+        break;
+      }
+
+      case 'delete-label': {
+        const name = args[0];
+        if (!name) { console.log('Usage: node gmail.js delete-label <name>'); return; }
+        await deleteLabel(name);
+        console.log(`✓ Deleted label "${name}"`);
+        break;
+      }
+
+      case 'trash': {
+        const id = args[0];
+        if (!id) { console.log('Usage: node gmail.js trash <message-id>'); return; }
+        await trashMessage(id);
+        console.log(`✓ Moved message ${id} to trash`);
+        break;
+      }
+
+      case 'delete': {
+        const id = args[0];
+        if (!id) { console.log('Usage: node gmail.js delete <message-id>'); return; }
+        await deleteMessage(id);
+        console.log(`✓ Permanently deleted message ${id}`);
+        break;
+      }
+
       default:
         console.log(`
 Gmail CLI Tool
 
 Usage:
-  node gmail.js inbox [count]           List recent inbox
-  node gmail.js unread [count]          List unread messages
-  node gmail.js read <id>               Read full message
-  node gmail.js search <query>          Search (Gmail syntax)
-  node gmail.js archive <id>            Archive message
-  node gmail.js label <id> <name>       Add label
-  node gmail.js draft <to> <subj> <body>  Create draft
-  node gmail.js labels                  List all labels
+  node gmail.js inbox [count]              List recent inbox
+  node gmail.js unread [count]             List unread messages
+  node gmail.js read <id>                  Read full message
+  node gmail.js search <query>             Search (Gmail syntax)
+  node gmail.js archive <id>               Archive message
+  node gmail.js trash <id>                 Move to trash
+  node gmail.js delete <id>                Permanently delete
+  node gmail.js label <id> <name>          Add label to message
+  node gmail.js labels                     List all labels
+  node gmail.js create-label <name> [color]  Create label (colors: red, orange, yellow, green, blue, purple, gray)
+  node gmail.js delete-label <name>        Delete a label
+  node gmail.js draft <to> <subj> <body>   Create draft
         `);
     }
   } catch (err) {

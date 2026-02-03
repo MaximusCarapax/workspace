@@ -31,6 +31,7 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - **Jason's Gmail:** jason.x.wu.27@gmail.com (API access — read/organize/draft, NO send)
 - **Brave Search API:** Configured and working (key in gateway config)
 - **Jason's Calendar:** "😤 Jason" shared with me
+- **OpenRouter:** Jason's account, API key in `~/.openclaw/secrets/openrouter.json` — use as Gemini fallback
 
 ## My Tools
 - **TOTP Manager:** `node tools/totp.js` - Generate 2FA codes independently
@@ -74,11 +75,32 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - Need Jason's help for account creation that requires CAPTCHA
 - Browser 2FA could give me independence (2! Authenticator extension)
 
+## ElevenLabs Conversational AI
+- **Agent ID:** agent_5101kghqpcgsfpfs9r4s1q43thza
+- **Phone:** +1 (820) 900-4002 connected to ElevenLabs
+- **Voice:** Roger (laid-back, casual)
+- **Brain:** Claude 3.5 Sonnet
+- Real-time voice conversations now working!
+
+## Jason's Contact
+- **Mobile:** +61429512420
+
 ## Backlog
 - ~~Twilio phone number~~ ✅ DONE! +18209004002
-- Voice capabilities (TTS already available via Edge)
+- ~~Voice capabilities~~ ✅ DONE! ElevenLabs TTS + Conversational AI
+- AU number pending (Twilio reg bundle approval)
 - Set up webhook to receive incoming SMS
-- Configure voice-call plugin in OpenClaw
+
+## Bird CLI (X/Twitter without API costs)
+- Installed: `npm install -g @steipete/bird`
+- Uses browser cookies for auth (AUTH_TOKEN, CT0)
+- Reading/mentions works, writes need Tailscale routing
+- Cookies stored in .env (AUTH_TOKEN, CT0)
+
+## Content Pipeline
+- `tools/insights.js` - Capture insights from daily work
+- Workflow: Work → Log → Extract (10pm) → Develop hooks → Schedule → Post
+- Cron jobs handle automated posting from scheduled queue
 
 ## OpenClaw Starter Kit
 - **Repo:** https://github.com/MaximusCarapax/openclaw-starter-kit
@@ -90,3 +112,27 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 
 ## Pending Reminders
 - **Affiliate links** - Jason needs to sign up for DigitalOcean (10% recurring) and Vultr ($35/signup) affiliate programs, then I add links to starter kit README
+
+## YouTube Channel: Agentic CoFounder
+- **Focus:** AI agents, building tools, automation tutorials
+- **Format:** Tutorials, builds, comparisons ("ChatGPT vs Agent that runs your life")
+
+### Primary Affiliates (Recurring Revenue)
+1. **Railway** — 15% recurring 12mo (AI deployments)
+2. **DigitalOcean** — 10% recurring 12mo (VPS tutorials)
+
+### No Affiliate Programs
+- AI APIs (OpenAI, Anthropic, Google, Replicate, Together AI)
+- Cloudflare, Cursor, GitHub Copilot
+
+### Content Ideas by Affiliate
+- **Railway:** "Deploy your AI agent to the cloud", "Railway vs other hosting for AI"
+- **DigitalOcean:** "Build an AI Chief of Staff from scratch (VPS tutorial)", "Self-host your AI"
+- **Notion:** "Build a second brain for your AI agent", "How I manage my AI with Notion"
+
+Full research: docs/AFFILIATE_PROGRAMS.md
+
+## Sub-Agent Cost Pattern
+- Default sub-agents to **Sonnet** (not Opus) via `model` parameter
+- Reference `docs/SUBAGENT_GUIDELINES.md` in task prompts
+- Sub-agents should delegate to Gemini/DeepSeek for grunt work

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mission Control</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e; 
+      color: #eee; 
+      min-height: 100vh;
+    }
+    header { 
+      background: #16213e; 
+      padding: 1rem 2rem; 
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+    header h1 { font-size: 1.5rem; color: #4da8ff; }
+    nav { display: flex; gap: 0.5rem; }
+    nav button {
+      background: transparent;
+      border: none;
+      color: #888;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-size: 1rem;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    nav button:hover { color: #eee; background: #0f3460; }
+    nav button.active { color: #4da8ff; background: #0f3460; }
+    main { padding: 1.5rem 2rem; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    /* Journals */
+    .journals-layout { display: grid; grid-template-columns: 200px 1fr; gap: 1.5rem; height: calc(100vh - 150px); }
+    .journal-list { 
+      background: #16213e; 
+      border-radius: 8px; 
+      padding: 1rem;
+      overflow-y: auto;
+    }
+    .journal-list h3 { margin-bottom: 1rem; color: #4da8ff; font-size: 0.9rem; }
+    .journal-list ul { list-style: none; }
+    .journal-list li { 
+      padding: 0.5rem; 
+      cursor: pointer; 
+      border-radius: 4px;
+      margin-bottom: 0.25rem;
+      font-size: 0.9rem;
+    }
+    .journal-list li:hover { background: #0f3460; }
+    .journal-list li.active { background: #0f3460; color: #4da8ff; }
+    .journal-content { 
+      background: #16213e; 
+      border-radius: 8px; 
+      padding: 1.5rem;
+      overflow-y: auto;
+    }
+    .journal-content h1, .journal-content h2 { color: #4da8ff; margin: 1rem 0 0.5rem; }
+    .journal-content h3 { color: #6cb8ff; margin: 0.8rem 0 0.4rem; }
+    .journal-content p { margin: 0.5rem 0; line-height: 1.6; }
+    .journal-content code { background: #0f3460; padding: 0.2rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+    .journal-content pre { background: #0a0a1a; padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.5rem 0; }
+    .journal-content ul, .journal-content ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+    .journal-content li { margin: 0.25rem 0; }
+    
+    /* Cards grid */
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1rem; }
+    .card { 
+      background: #16213e; 
+      border-radius: 8px; 
+      padding: 1.25rem;
+      border-left: 3px solid #0f3460;
+    }
+    .card h3 { font-size: 1rem; margin-bottom: 0.75rem; }
+    .card p { color: #aaa; font-size: 0.9rem; line-height: 1.5; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-right: 0.5rem;
+    }
+    .badge.draft { background: #3a3a5e; color: #aaa; }
+    .badge.scheduled { background: #0f3460; color: #4da8ff; }
+    .badge.published { background: #1a4d2e; color: #4dff88; }
+    .badge.idea { background: #4a3a1e; color: #ffcc4d; }
+    .badge.reviewed { background: #2e1a4d; color: #cc88ff; }
+    .tags { margin-top: 0.75rem; }
+    .tag {
+      display: inline-block;
+      background: #0f3460;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      margin-right: 0.3rem;
+      margin-bottom: 0.3rem;
+      color: #88aacc;
+    }
+    
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+    .stat-card { 
+      background: #16213e; 
+      border-radius: 8px; 
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .stat-value { font-size: 2.5rem; font-weight: bold; color: #4da8ff; }
+    .stat-label { color: #888; margin-top: 0.5rem; }
+    
+    .loading { color: #888; padding: 2rem; text-align: center; }
+    .empty { color: #666; padding: 2rem; text-align: center; font-style: italic; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎛️ Mission Control</h1>
+    <nav>
+      <button class="active" onclick="showTab('journals')">Journals</button>
+      <button onclick="showTab('content')">Content</button>
+      <button onclick="showTab('insights')">Insights</button>
+      <button onclick="showTab('stats')">Stats</button>
+    </nav>
+  </header>
+  
+  <main>
+    <!-- Journals Tab -->
+    <div id="journals" class="tab-content active">
+      <div class="journals-layout">
+        <div class="journal-list">
+          <h3>📝 Daily Logs</h3>
+          <ul id="journal-dates"></ul>
+        </div>
+        <div class="journal-content" id="journal-content">
+          <p class="empty">Select a date to view</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Content Tab -->
+    <div id="content" class="tab-content">
+      <h2 style="margin-bottom: 1rem;">📅 Content Calendar</h2>
+      <div class="cards" id="content-cards"></div>
+    </div>
+    
+    <!-- Insights Tab -->
+    <div id="insights" class="tab-content">
+      <h2 style="margin-bottom: 1rem;">💡 Insights</h2>
+      <div class="cards" id="insights-cards"></div>
+    </div>
+    
+    <!-- Stats Tab -->
+    <div id="stats" class="tab-content">
+      <h2 style="margin-bottom: 1rem;">📊 Stats</h2>
+      <div class="stats-grid" id="stats-grid"></div>
+    </div>
+  </main>
+
+  <script>
+    // Tab switching
+    function showTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+      
+      if (tabId === 'journals') loadJournals();
+      if (tabId === 'content') loadContent();
+      if (tabId === 'insights') loadInsights();
+      if (tabId === 'stats') loadStats();
+    }
+
+    // Load journals list
+    async function loadJournals() {
+      const list = document.getElementById('journal-dates');
+      try {
+        const res = await fetch('/api/journals');
+        const journals = await res.json();
+        list.innerHTML = journals.map(j => 
+          `<li onclick="loadJournal('${j.date}')">${j.date}</li>`
+        ).join('') || '<li class="empty">No journals</li>';
+      } catch (e) {
+        list.innerHTML = '<li class="empty">Error loading</li>';
+      }
+    }
+
+    // Load single journal
+    async function loadJournal(date) {
+      const content = document.getElementById('journal-content');
+      document.querySelectorAll('.journal-list li').forEach(li => li.classList.remove('active'));
+      event.target.classList.add('active');
+      content.innerHTML = '<p class="loading">Loading...</p>';
+      try {
+        const res = await fetch(`/api/journals/${date}`);
+        const md = await res.text();
+        content.innerHTML = marked.parse(md);
+      } catch (e) {
+        content.innerHTML = '<p class="empty">Error loading journal</p>';
+      }
+    }
+
+    // Load content calendar
+    async function loadContent() {
+      const container = document.getElementById('content-cards');
+      try {
+        const res = await fetch('/api/content');
+        const data = await res.json();
+        const items = data.items || [];
+        container.innerHTML = items.map(item => `
+          <div class="card">
+            <span class="badge ${item.status}">${item.status}</span>
+            <span class="badge">${item.platform || 'any'}</span>
+            <h3>${item.hook || item.content?.slice(0, 60) + '...' || 'Untitled'}</h3>
+            <p>${item.content || item.hook || ''}</p>
+            ${item.tags?.length ? `<div class="tags">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
+          </div>
+        `).join('') || '<p class="empty">No content items</p>';
+      } catch (e) {
+        container.innerHTML = '<p class="empty">Error loading content</p>';
+      }
+    }
+
+    // Load insights
+    async function loadInsights() {
+      const container = document.getElementById('insights-cards');
+      try {
+        const res = await fetch('/api/insights');
+        const data = await res.json();
+        const items = data.items || [];
+        container.innerHTML = items.map(item => `
+          <div class="card">
+            <span class="badge ${item.status}">${item.status}</span>
+            <h3>${item.content?.slice(0, 80)}...</h3>
+            <p>${item.fullInsight || item.content}</p>
+            ${item.tags?.length ? `<div class="tags">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
+          </div>
+        `).join('') || '<p class="empty">No insights</p>';
+      } catch (e) {
+        container.innerHTML = '<p class="empty">Error loading insights</p>';
+      }
+    }
+
+    // Load stats
+    async function loadStats() {
+      const container = document.getElementById('stats-grid');
+      container.innerHTML = '<p class="loading">Loading...</p>';
+      
+      try {
+        const [xRes, redditRes] = await Promise.all([
+          fetch('/api/x-stats').then(r => r.json()).catch(() => null),
+          fetch('/api/reddit-pulse').then(r => r.json()).catch(() => null)
+        ]);
+        
+        let html = '';
+        
+        if (xRes) {
+          html += `
+            <div class="stat-card">
+              <div class="stat-value">${xRes.currentMonth?.posts || 0}</div>
+              <div class="stat-label">X Posts This Month</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">${500 - (xRes.currentMonth?.posts || 0)}</div>
+              <div class="stat-label">Posts Remaining (of 500)</div>
+            </div>
+          `;
+        }
+        
+        if (redditRes?.pulses?.length) {
+          const latest = redditRes.pulses[0];
+          html += `
+            <div class="stat-card">
+              <div class="stat-value">${latest.subreddits?.length || 0}</div>
+              <div class="stat-label">Subreddits Tracked</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">${latest.totalPosts || 0}</div>
+              <div class="stat-label">Posts Analyzed</div>
+            </div>
+          `;
+        }
+        
+        container.innerHTML = html || '<p class="empty">No stats available</p>';
+      } catch (e) {
+        container.innerHTML = '<p class="empty">Error loading stats</p>';
+      }
+    }
+
+    // Initial load
+    loadJournals();
+  </script>
+</body>
+</html>
