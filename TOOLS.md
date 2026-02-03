@@ -231,6 +231,12 @@ node tools/linkedin.js edit                   # Edit About section
 - Session persistence via cookies (`/tmp/linkedin-cookies.json`)
 - Use `waitUntil: 'domcontentloaded'` (not 'networkidle' - times out)
 
+**Post automation (fixed 2026-02-03):**
+- Use `getByText('Start a post')` to open modal
+- Use `getByPlaceholder('What do you want to talk about')` for editor
+- Use `getByRole('button', { name: 'Post' })` to submit
+- Old class-based selectors broke when LinkedIn updated their UI
+
 ## X/Twitter 🐦
 API-based posting and monitoring (@MaximusCarapax).
 

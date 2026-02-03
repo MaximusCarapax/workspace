@@ -583,25 +583,46 @@ async function createPost(text) {
     
     console.log('📝 Creating post...');
     
-    await page.click('button.share-box-feed-entry__trigger').catch(() => {});
-    await page.waitForTimeout(1500);
+    // Step 1: Click "Start a post" using Playwright locator
+    const startPostBtn = page.getByText('Start a post', { exact: true });
+    await startPostBtn.click({ force: true });
+    await page.waitForTimeout(2500);
     
-    const editor = await page.$('.ql-editor[data-placeholder]') || 
-                   await page.$('[role="textbox"]') ||
-                   await page.$('.share-creation-state__text-editor');
-    
-    if (!editor) {
-      console.error('❌ Could not find post editor');
-      process.exit(1);
+    // Step 2: Find editor using placeholder locator (most reliable)
+    const editor = page.getByPlaceholder('What do you want to talk about');
+    try {
+      await editor.click({ timeout: 5000 });
+    } catch (e) {
+      // Fallback: try other locators
+      const fallbackLocators = [
+        page.locator('div.ql-editor'),
+        page.locator('[data-placeholder]').first(),
+        page.locator('.share-creation-state__text-editor')
+      ];
+      let found = false;
+      for (const loc of fallbackLocators) {
+        try {
+          if (await loc.count() > 0) {
+            await loc.click({ timeout: 3000 });
+            found = true;
+            break;
+          }
+        } catch (e2) {}
+      }
+      if (!found) {
+        console.error('❌ Could not find post editor');
+        process.exit(1);
+      }
     }
     
-    await editor.click();
-    await page.keyboard.type(text, { delay: 30 });
+    // Step 3: Type the content
+    await page.waitForTimeout(500);
+    await page.keyboard.type(text, { delay: 15 });
     await page.waitForTimeout(1000);
     
-    await page.click('button.share-actions__primary-action').catch(async () => {
-      await page.click('button:has-text("Post")');
-    });
+    // Step 4: Click Post button
+    const postBtn = page.getByRole('button', { name: 'Post', exact: true });
+    await postBtn.click({ timeout: 5000 });
     
     await page.waitForTimeout(3000);
     await saveCookies(page.context());
