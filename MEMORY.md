@@ -79,3 +79,14 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - Voice capabilities (TTS already available via Edge)
 - Set up webhook to receive incoming SMS
 - Configure voice-call plugin in OpenClaw
+
+## OpenClaw Starter Kit
+- **Repo:** https://github.com/MaximusCarapax/openclaw-starter-kit
+- **Status:** Production-ready (2026-02-03)
+- **Flow:** 2 commands → talking to agent in ~5 min
+- **Tools included:** gmail, google-calendar, notion, weather, web-scraper, youtube-transcript, rag, gemini, deepseek
+- **Cost:** All free APIs (Gemini embeddings, Open-Meteo weather, etc.)
+- **Task brain:** Notion for Chief of Staff mode kanban
+
+## Pending Reminders
+- **Affiliate links** - Jason needs to sign up for DigitalOcean (10% recurring) and Vultr ($35/signup) affiliate programs, then I add links to starter kit README
