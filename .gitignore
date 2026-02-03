@@ -6,9 +6,16 @@ node_modules/
 *.secret
 *.key
 credentials.json
+**/credentials.json
 secrets/
+**/secrets/
 .env
+.env.*
 !.env.example
+
+# Sensitive logs (may contain secrets)
+memory/*.log
+memory/errors.log
 
 # OpenClaw internals
 sessions/
