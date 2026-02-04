@@ -10,3 +10,63 @@
 
 # 2026-02-04 12:52:08.544827
 +say hello
+
+# 2026-02-04 21:29:59.392790
++Create lib/activity.js - a unified activity logging service that wraps the existing db.logActivity() function with both simple and full APIs. 
++
++Requirements:
++1. Simple API: activity.log(action, description, category) 
++2. Full API: activity.log({ action, category, description, metadata, sessionId })
++3. Query methods for digest integration: getActivitiesByDate, getActivitiesByAction, getActivitiesByCategory
++4. All methods should use the existing db functions from lib/db.js
++5. Include JSDoc documentation
++6. Export a clean interface for use across the codebase
++
++The goal is to make activity logging dead simple for other parts of the system while leveraging the existing database layer.
+
+# 2026-02-04 21:29:59.392857
++Create lib/activity.js - a unified activity logging service that wraps the existing db.logActivity() function with both simple and full APIs. 
++
++Requirements:
++1. Simple API: activity.log(action, description, category) 
++2. Full API: activity.log({ action, category, description, metadata, sessionId })
++3. Query methods for digest integration: getActivitiesByDate, getActivitiesByAction, getActivitiesByCategory
++4. All methods should use the existing db functions from lib/db.js
++5. Include JSDoc documentation
++6. Export a clean interface for use across the codebase
++
++The goal is to make activity logging dead simple for other parts of the system while leveraging the existing database layer.
+
+# 2026-02-04 21:31:14.510791
++Enhanced the existing tools/db.js activity command to support the new filtering capabilities from the activity service. Current command: activity [--limit 20]. Enhance to support --category, --since, --until, --action, --search flags plus summary and stats subcommands. Use the new lib/activity.js functions.
+
+# 2026-02-04 21:31:14.510907
++Enhanced the existing tools/db.js activity command to support the new filtering capabilities from the activity service. Current command: activity [--limit 20]. Enhance to support --category, --since, --until, --action, --search flags plus summary and stats subcommands. Use the new lib/activity.js functions.
+
+# 2026-02-04 21:34:05.799957
++Add session summary functionality to tools/db.js activity command. 
++
++Requirements:
++1. Add 'summary' subcommand that accepts a manual session description
++2. Log the session summary as an activity with action='session_summary', category='session'
++3. Auto-detection capability for significant sessions (5k+ tokens OR 30+ min duration)
++4. Example: 'node tools/db.js activity summary "Built activity logging system"'
++
++The session summary should be stored as an activity log entry so it can be queried later for digests.
+
+# 2026-02-04 21:34:05.800077
++Add session summary functionality to tools/db.js activity command. 
++
++Requirements:
++1. Add 'summary' subcommand that accepts a manual session description
++2. Log the session summary as an activity with action='session_summary', category='session'
++3. Auto-detection capability for significant sessions (5k+ tokens OR 30+ min duration)
++4. Example: 'node tools/db.js activity summary "Built activity logging system"'
++
++The session summary should be stored as an activity log entry so it can be queried later for digests.
+
+# 2026-02-04 21:35:53.789655
++Update the builder.md and spec-writer.md templates to include activity logging hooks before completion. Add JavaScript code snippets that log activities using require('../lib/activity').log(). For builder, log 'build_completed' with category 'build'. For spec-writer, log 'spec_completed' with category 'spec'. Include metadata with relevant file paths.
+
+# 2026-02-04 21:35:53.789975
++Update the builder.md and spec-writer.md templates to include activity logging hooks before completion. Add JavaScript code snippets that log activities using require('../lib/activity').log(). For builder, log 'build_completed' with category 'build'. For spec-writer, log 'spec_completed' with category 'spec'. Include metadata with relevant file paths.

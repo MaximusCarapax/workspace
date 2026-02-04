@@ -60,9 +60,11 @@ node tools/route.js config                        # View routing config
 ```
 
 **Routing rules:**
-- summarize, research, extract, translate → **Gemini (FREE)**
-- code, debug, refactor, test → **DeepSeek ($0.14/M)**
-- default → **Gemini (FREE)**
+- summarize, research, extract, translate → **Gemini (~$0.10/M via OpenRouter)**
+- code, debug, refactor, test → **DeepSeek (~$0.27/M in, $1.10/M out)**
+- default → **Gemini**
+
+**Note:** We use OpenRouter for Gemini to avoid rate limits. Cheap, not free.
 
 **Fallbacks:** Gemini ↔ DeepSeek (auto-retry on quota/rate limit)
 
@@ -203,8 +205,8 @@ cd /home/node/.openclaw/workspace
 /home/node/.local/bin/aider --model deepseek/deepseek-chat [files...]
 ```
 **Note:** Use full path — persists across Zeabur restarts.
-**Model:** `deepseek-chat` routes to V3.2 (their best model, ~$0.27/$1.10 per 1M tokens)
-- **Cost:** ~$0.14 per million tokens (basically free)
+**Model:** `deepseek-chat` routes to V3.2 (their best model)
+- **Cost:** ~$0.27/M input, $1.10/M output (very cheap)
 - **Use for:** All coding tasks — git-aware, multi-file edits
 - **Why:** Proper CLI tool, consistent workflow, auto-commits
 
@@ -220,8 +222,8 @@ node tools/research.js -q "question" url1 url2 url3
 node tools/research.js -q "question" -f urls.txt    # URLs from file
 node tools/research.js --deepseek -q "question" url1  # Force DeepSeek
 ```
-- **Primary:** Gemini (free)
-- **Fallback:** DeepSeek (if Gemini quota exceeded)
+- **Primary:** Gemini via OpenRouter (~$0.10/M)
+- **Fallback:** DeepSeek (if Gemini fails)
 - **Limits:** 4k chars/page, 20k chars total
 - **Pattern:** Opus searches → script fetches & summarizes → Opus delivers
 
@@ -234,7 +236,7 @@ node tools/post-drafter.js hooks "topic"           # Generate hook options
 node tools/post-drafter.js ideas "AI productivity" # Generate content ideas
 node tools/post-drafter.js refine "text" --shorter --punchier
 ```
-- Uses Gemini (free!) with DeepSeek fallback
+- Uses Gemini (~$0.10/M via OpenRouter) with DeepSeek fallback
 - Platforms: linkedin, x, thread
 - Tones: professional, casual, provocative, storytelling, educational
 - Auto-saves to content calendar with `--save`
@@ -261,13 +263,13 @@ node tools/trending.js --hacker --analyze    # + AI theme extraction
 | Task | Tool | Cost |
 |------|------|------|
 | Architecture/Design | Opus (me) | $$$ |
-| Bulk coding | DeepSeek | ¢ |
-| Quick fixes | Gemini | Free |
+| Bulk coding | DeepSeek | ~$0.27/M |
+| Quick fixes | Gemini | ~$0.10/M |
 
 **My internal tool:**
 ```bash
 node tools/code.js "prompt"           # DeepSeek (default, cheap)
-node tools/code.js -g "prompt"        # Gemini (free when quota allows)
+node tools/code.js -g "prompt"        # Gemini (~$0.10/M via OpenRouter)
 node tools/code.js -f file.js "prompt" # Include file context
 ```
 

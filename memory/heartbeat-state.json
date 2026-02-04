@@ -1,7 +1,14 @@
 {
-  "lastChecks": {
-    "errorCheck": "2026-02-04T07:01:23Z",
-    "xMentions": "2026-02-04T07:01:23Z",
-    "checkedAt": "2026-02-04T07:01:23Z"
+  "timestamp": "2026-02-04T21:31:26.830Z",
+  "dailySpend": 133.74,
+  "healthIssues": [
+    "Gmail token needs refresh",
+    "Cron has 1 overdue job",
+    "Git has 16 uncommitted files",
+    "LinkedIn session cookies missing"
+  ],
+  "errorCount": 28,
+  "socialMedia": {
+    "xMentions": 0
   }
 }

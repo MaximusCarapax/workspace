@@ -21,12 +21,13 @@
 const { TwitterApi } = require('twitter-api-v2');
 const fs = require('fs');
 const path = require('path');
+const db = require('../lib/db');
 
 // Load credentials
 const credsPath = path.join(process.env.HOME, '.openclaw/secrets/credentials.json');
 const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
 
-// Stats tracking file
+// Legacy stats file (for migration)
 const statsFile = path.join(process.env.HOME, '.openclaw/workspace/dashboard/data/x-post-stats.json');
 
 // Initialize client with OAuth 1.0a (required for posting)
@@ -40,57 +41,65 @@ const client = new TwitterApi({
 // Twitter character limit
 const MAX_CHARS = 280;
 
-// Load posting stats
-function loadStats() {
+// Migrate legacy stats file to SQLite (run once)
+function migrateLegacyStats() {
   try {
-    return JSON.parse(fs.readFileSync(statsFile, 'utf8'));
+    if (!fs.existsSync(statsFile)) return 0;
+    const stats = JSON.parse(fs.readFileSync(statsFile, 'utf8'));
+    let migrated = 0;
+    for (const post of (stats.posts || [])) {
+      try {
+        db.trackSocialPost({
+          platform: 'x',
+          postId: post.id,
+          postType: post.type || 'post',
+          content: post.text,
+          url: post.id ? `https://x.com/MaximusCarapax/status/${post.id}` : null
+        });
+        migrated++;
+      } catch (e) {
+        // Skip duplicates or errors
+      }
+    }
+    // Rename old file to mark as migrated
+    if (migrated > 0) {
+      fs.renameSync(statsFile, statsFile + '.migrated');
+    }
+    return migrated;
   } catch {
+    return 0;
+  }
+}
+
+// Track a new post (uses SQLite)
+function trackPost(tweetId, text, type = 'post', replyTo = null) {
+  const url = `https://x.com/MaximusCarapax/status/${tweetId}`;
+  db.trackSocialPost({
+    platform: 'x',
+    postId: tweetId,
+    postType: type,
+    content: text,
+    url: url,
+    inReplyTo: replyTo
+  });
+  return { id: tweetId, url };
+}
+
+// Check for duplicate/similar content (uses SQLite)
+function checkDuplicate(text, threshold = 0.6) {
+  const result = db.checkSocialDuplicate('x', text, threshold);
+  if (result.isDuplicate && result.matchedPost) {
+    // Format for display
     return {
-      totalPosts: 0,
-      monthlyPosts: {},
-      lastPost: null,
-      posts: []
+      isDuplicate: true,
+      similarity: result.similarity,
+      matchedPost: {
+        text: result.matchedPost.content,
+        timestamp: result.matchedPost.created_at
+      }
     };
   }
-}
-
-// Save posting stats
-function saveStats(stats) {
-  const dir = path.dirname(statsFile);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(statsFile, JSON.stringify(stats, null, 2));
-}
-
-// Get current month key
-function getMonthKey() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-// Track a new post
-function trackPost(tweetId, text, type = 'post') {
-  const stats = loadStats();
-  const monthKey = getMonthKey();
-  
-  stats.totalPosts++;
-  stats.monthlyPosts[monthKey] = (stats.monthlyPosts[monthKey] || 0) + 1;
-  stats.lastPost = new Date().toISOString();
-  stats.posts.push({
-    id: tweetId,
-    text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-    type,
-    timestamp: new Date().toISOString()
-  });
-  
-  // Keep only last 50 posts in history
-  if (stats.posts.length > 50) {
-    stats.posts = stats.posts.slice(-50);
-  }
-  
-  saveStats(stats);
-  return stats;
+  return { isDuplicate: false };
 }
 
 // Validate tweet text
@@ -107,6 +116,23 @@ function validateTweet(text) {
 // Post a single tweet
 async function postTweet(text, options = {}) {
   const validated = validateTweet(text);
+  
+  // Check for duplicates (unless explicitly skipped)
+  if (!options.skipDupeCheck) {
+    const dupeCheck = checkDuplicate(validated);
+    if (dupeCheck.isDuplicate) {
+      console.log(`⚠️  DUPLICATE DETECTED (${dupeCheck.similarity} similar)`);
+      console.log(`📝 New: "${validated.substring(0, 60)}..."`);
+      console.log(`📝 Old: "${dupeCheck.matchedPost.text}"`);
+      console.log(`🕐 Posted: ${dupeCheck.matchedPost.timestamp}`);
+      
+      if (!options.forceDupe) {
+        console.log('\n❌ Blocked duplicate post. Use --force to override.');
+        return { blocked: true, reason: 'duplicate', similarity: dupeCheck.similarity };
+      }
+      console.log('\n⚠️  Forcing duplicate post (--force flag used)');
+    }
+  }
   
   if (options.dryRun) {
     console.log('🔍 DRY RUN - Would post:');
@@ -134,7 +160,7 @@ async function postTweet(text, options = {}) {
     console.log(`✅ Posted: ${tweetUrl}`);
     console.log(`📝 Text: "${validated}"`);
     
-    trackPost(result.data.id, validated, options.replyTo ? 'reply' : options.quoteTweet ? 'quote' : 'post');
+    trackPost(result.data.id, validated, options.replyTo ? 'reply' : options.quoteTweet ? 'quote' : 'post', options.replyTo);
     
     return {
       success: true,
@@ -231,24 +257,24 @@ async function deleteTweet(tweetId) {
   }
 }
 
-// Show posting statistics
+// Show posting statistics (uses SQLite)
 function showStats() {
-  const stats = loadStats();
-  const monthKey = getMonthKey();
-  const monthlyCount = stats.monthlyPosts[monthKey] || 0;
-  const remaining = 500 - monthlyCount;
+  const stats = db.getSocialStats('x');
+  const remaining = 500 - stats.postsThisMonth;
   
   console.log('📊 X Posting Statistics');
   console.log('========================');
   console.log(`Total posts (all time): ${stats.totalPosts}`);
-  console.log(`Posts this month: ${monthlyCount}/500`);
+  console.log(`Posts this month: ${stats.postsThisMonth}/500`);
   console.log(`Remaining: ${remaining}`);
-  console.log(`Last post: ${stats.lastPost || 'Never'}`);
+  console.log(`Last post: ${stats.lastPost ? stats.lastPost.created_at : 'Never'}`);
   
-  if (stats.posts.length > 0) {
+  const recentPosts = db.getRecentSocialPosts('x', 5);
+  if (recentPosts.length > 0) {
     console.log('\n📜 Recent posts:');
-    stats.posts.slice(-5).forEach(p => {
-      console.log(`  [${p.type}] ${p.timestamp.split('T')[0]}: "${p.text}"`);
+    recentPosts.forEach(p => {
+      const truncated = p.content.substring(0, 80) + (p.content.length > 80 ? '...' : '');
+      console.log(`  [${p.post_type}] ${p.created_at.split('T')[0]}: "${truncated}"`);
     });
   }
   
@@ -263,8 +289,10 @@ async function main() {
   try {
     switch (command) {
       case 'post': {
-        const text = args.slice(1).join(' ');
-        await postTweet(text);
+        const hasForce = args.includes('--force');
+        const filteredArgs = args.slice(1).filter(a => a !== '--force');
+        const text = filteredArgs.join(' ');
+        await postTweet(text, { forceDupe: hasForce });
         break;
       }
       
@@ -308,6 +336,12 @@ async function main() {
       
       case 'stats': {
         showStats();
+        break;
+      }
+      
+      case 'migrate': {
+        const count = migrateLegacyStats();
+        console.log(`✅ Migrated ${count} posts from legacy JSON to SQLite`);
         break;
       }
       

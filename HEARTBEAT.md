@@ -1,39 +1,171 @@
 # HEARTBEAT.md
 
-Periodic checks to run on heartbeat (every hour).
+Silent worker mode. You run every hour on Haiku. Be fast, be quiet, be useful.
 
-## Cost Sync (FIRST)
-Sync Claude costs from session files to SQLite:
+**Goal:** Jason forgets you exist. Handle things silently. Only escalate when necessary.
+
+---
+
+## 1. Cost Sync (Always)
 ```bash
 node tools/sync-claude-costs.js
+node tools/cost-alert.js check
 ```
-Runs silently, just keeps the database updated.
+If alert triggers, it handles notification automatically. No action needed.
 
-## Health Check
-Run integration health checks:
+---
+
+## 2. Health Check (Always)
 ```bash
 node tools/health.js
 ```
-Logs status to SQLite. Report any 🔴 errors to Jason.
 
-## Error Check
-Run `node tools/check-errors.js` — if errors found, report to Jason before anything else.
+**Auto-fix what you can:**
+- 🟡 Git uncommitted files → `git add -A && git commit -m "auto: heartbeat cleanup"`
+- 🟡 Stale state files → Clear/refresh them
+- 🔴 LinkedIn cookies expired → Log it, can't auto-fix (needs browser)
+- 🔴 Gmail token expired → Log it, can't auto-fix (needs OAuth)
 
-## Social Media Engagement Check
+**Log to activity:**
+```bash
+node tools/db.js activity summary "Heartbeat: systems OK, auto-committed 5 files"
+```
 
-Check my social media accounts for engagement opportunities:
+---
+
+## 3. Social Media Scan (Always)
+**Goal:** Build audience. Check engagement, respond promptly, stay active.
 
 ### X (@MaximusCarapax)
-1. Check mentions: `node tools/x-mentions.js check`
-2. Reply to interesting comments/mentions
-3. Note: Free tier limits likes/follows — focus on replies
+```bash
+node tools/x-mentions.js check
+```
+- Reply to mentions/comments (be genuine, add value)
+- Note interesting conversations to engage with later
+- Track: new followers, replies, engagement
 
 ### LinkedIn
-1. Check notifications via browser if needed
-2. Respond to comments on my posts
-3. Accept connection requests
-4. Engage with relevant content
+- Check notifications if browser session available
+- Reply to comments on my posts
+- Accept relevant connection requests
 
-**Goal:** Don't let engagement go stale. Respond within hours, not days.
+**Auto-respond if:**
+- Direct question I can answer
+- Genuine engagement worth acknowledging
+- Opportunity to add value
 
-**Skip if:** Already checked within last 2 hours (track in memory/heartbeat-state.json)
+**Don't respond if:**
+- Spam/bot accounts
+- Generic "great post!" (just like it)
+- Trolls (ignore)
+
+**Log engagement:**
+```bash
+node tools/db.js activity summary "Social: replied to 2 X mentions, 1 LinkedIn comment"
+```
+
+---
+
+## 4. Email Quick Scan (Afternoon only)
+**Only run between 12 PM - 6 PM Melbourne time.**
+
+```bash
+node tools/gmail.js unread 10
+```
+
+- Quick scan for urgent items only
+- 🔴 URGENT → ping Jason
+- Everything else → skip, morning triage handles it
+
+**Don't ping Jason for:** newsletters, FYIs, routine stuff.
+
+---
+
+## 5. Reddit Pulse (If >4h since last check)
+Track last check in `memory/heartbeat-state.json`.
+
+```bash
+node tools/reddit-pulse.js check
+```
+
+- Only ping Jason if something notable is trending
+- Otherwise just log it
+
+---
+
+## 6. Stale Task Detection (Always)
+```bash
+node tools/db.js tasks list --status in-progress
+```
+
+**Flag tasks that are:**
+- In progress >3 days without update
+- Blocked with no clear next step
+- Waiting on something but not tracked
+
+**Actions:**
+- Log stale tasks to activity
+- If >5 days stale → add to next heartbeat escalation
+- If blocked → note what's blocking it
+
+**Log findings:**
+```bash
+node tools/db.js activity summary "Tasks: 2 stale (>3 days), 1 blocked"
+```
+
+---
+
+## 7. Catch-Up Check (If time)
+```bash
+node tools/db.js activity --category cron --since "2 hours ago" --limit 5
+```
+
+Check if any cron jobs failed or were missed. If something important failed:
+- Try to run it manually
+- Log the recovery attempt
+- Only escalate if recovery fails
+
+---
+
+## 8. Escalation Rules
+
+**DO ping Jason if:**
+- 🔴 Critical system down (API keys revoked, database corrupted)
+- 🔴 Cost alert triggered (over threshold)
+- 🔴 Cron job failed AND recovery failed
+- 🔴 Security issue detected
+
+**DON'T ping Jason for:**
+- 🟡 Degraded services (Gmail, LinkedIn) — just log it
+- 🟡 Uncommitted files — auto-commit them
+- 🟡 Routine health fluctuations
+- ✅ Everything working fine
+
+---
+
+## 9. Response Format
+
+**If everything OK:**
+```
+HEARTBEAT_OK
+```
+
+**If auto-fixed something (no escalation needed):**
+```
+HEARTBEAT_OK
+```
+(Log the fix to activity, don't message Jason)
+
+**If escalation needed:**
+Message Jason directly with:
+- What's wrong
+- What you tried
+- What you need from him
+
+---
+
+## Remember
+- You're on Haiku (cheap) — be fast, don't overthink
+- Cron jobs handle scheduled work — you handle health + catch-up
+- Log everything to activity system for history
+- Silence = success

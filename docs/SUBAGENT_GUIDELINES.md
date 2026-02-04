@@ -6,7 +6,30 @@ Standard operating procedures for spawned sub-agents. Follow these to keep costs
 
 1. **Your reasoning (Claude)** — Planning, decisions, complex logic, quality review
 2. **Gemini (`node tools/gemini.js`)** — Summarization, research synthesis, boilerplate generation
-3. **DeepSeek (`node tools/deepseek.js`)** — Coding tasks, code generation, refactoring
+3. **DeepSeek (aider or `node tools/code.js`)** — All coding tasks
+
+## Coding Delegation (IMPORTANT)
+
+You are an **orchestrator**, not a code generator. Delegate coding to DeepSeek:
+
+**For multi-file or complex code:**
+```bash
+/home/node/.local/bin/aider --model deepseek/deepseek-chat [files...]
+```
+- Aider is git-aware and handles multi-file edits
+- Give it clear instructions, review its output
+
+**For single-file code generation:**
+```bash
+node tools/code.js "prompt describing what to build"
+node tools/code.js -f existing.js "prompt to modify this file"
+```
+
+**Direct write/edit only for:**
+- Config files (JSON, YAML)
+- Documentation (markdown)
+- Small fixes (<10 lines)
+- Non-code files
 
 ## When to Delegate
 
@@ -20,15 +43,14 @@ Standard operating procedures for spawned sub-agents. Follow these to keep costs
 node tools/gemini.js "Summarize this article: [content]"
 ```
 
-### Use DeepSeek for:
+### Use DeepSeek (via aider) for:
 - Writing new code
 - Refactoring existing code
 - Debugging
-- Code explanation
+- Multi-file changes
 
 ```bash
-node tools/deepseek.js "Write a function that..."
-node tools/code.js "prompt"  # Auto-routes to cheapest
+/home/node/.local/bin/aider --model deepseek/deepseek-chat tools/new-tool.js
 ```
 
 ### Use Your Own Reasoning for:
@@ -42,15 +64,17 @@ node tools/code.js "prompt"  # Auto-routes to cheapest
 
 | Model | Cost | Use For |
 |-------|------|---------|
-| Gemini Flash | Free | Summarization, generation |
-| DeepSeek | ~$0.14/M tokens | Coding |
-| Sonnet | ~$3/M tokens | Sub-agent default |
-| Opus | ~$15/M tokens | Complex reasoning (main session) |
+| Gemini (OpenRouter) | ~$0.10/M in, $0.40/M out | Summarization, generation |
+| DeepSeek V3.2 | ~$0.27/M in, $1.10/M out | Coding |
+| Sonnet | ~$3/M in, $15/M out | Sub-agent default |
+| Opus | ~$15/M in, $75/M out | Complex reasoning (main session) |
+
+**Note:** We use OpenRouter for Gemini to avoid rate limits. It's cheap, not free.
 
 ## Standard Task Pattern
 
 1. **Plan** (your reasoning) — What needs to be done?
-2. **Delegate** (Gemini/DeepSeek) — Have cheap models do the grunt work
+2. **Delegate** (aider/Gemini) — Have cheap models do the grunt work
 3. **Review** (your reasoning) — Check the output, iterate if needed
 4. **Deliver** — Final output
 
@@ -58,16 +82,16 @@ node tools/code.js "prompt"  # Auto-routes to cheapest
 
 **Bad (expensive):**
 ```
-I'll summarize these 5 web pages myself...
-[Uses Opus tokens for all summarization]
+I'll write this code myself...
+[Uses Sonnet tokens for all code generation]
 ```
 
 **Good (cheap):**
 ```
-Let me fetch these pages and have Gemini summarize them...
-[Fetch pages with web_fetch]
-[Run: node tools/gemini.js "Summarize: [content]"]
-[Review Gemini's output, synthesize final answer]
+Let me plan what's needed, then have DeepSeek implement it...
+[Plan the approach]
+[Run: aider --model deepseek/deepseek-chat tools/my-tool.js]
+[Review DeepSeek's output, test it, iterate if needed]
 ```
 
 ---

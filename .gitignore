@@ -40,3 +40,4 @@ build/
 *.bak
 data/linkedin-cookies.json
 .git-push-notification
+.aider*

@@ -6,7 +6,6 @@
 
 const db = require('../lib/db');
 const activity = require('../lib/activity');
-const activity = require('../lib/activity');
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -300,9 +299,6 @@ function errorsResolve(id) {
 // ACTIVITY
 // ============================================================
 
-// Import the activity service
-const activity = require('../lib/activity');
-
 function activityShow(options = {}) {
   const {
     limit = 20,
@@ -374,7 +370,21 @@ function activityShow(options = {}) {
   console.log('');
 }
 
-function activitySummary() {
+function activitySummary(description = null) {
+  // If a description is provided, log it as a session summary
+  if (description) {
+    // Log the session summary as an activity
+    activity.log('session_summary', description, 'session');
+    console.log(`\n📝 Logged session summary: "${description}"\n`);
+    
+    // Note: Auto-detection for significant sessions could be added here
+    // For example, check if recent token usage > 5000 or duration > 30 minutes
+    // This would require querying the database for recent usage data
+    // For now, we just log the manual description
+    return;
+  }
+  
+  // Otherwise, show the statistics summary (original behavior)
   const digest = activity.getDigest({ period: 'day', limit: 10 });
   
   console.log('\n📊 Activity Summary (Last 24 Hours)\n');
@@ -734,7 +744,9 @@ try {
       
     case 'activity':
       if (subcommand === 'summary') {
-        activitySummary();
+        // Check if there's a description argument
+        const description = args[2];
+        activitySummary(description);
       } else if (subcommand === 'stats') {
         activityStats(flags.period || 'day');
       } else {
