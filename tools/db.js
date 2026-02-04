@@ -228,6 +228,57 @@ function costsBySource(days = 7) {
   console.log('');
 }
 
+function costsDailyBySource(days = 7) {
+  const stats = db.db.prepare(`
+    SELECT 
+      date(created_at) as day,
+      COALESCE(source, 'unknown') as source,
+      COALESCE(SUM(cost_usd), 0) as total_cost,
+      COUNT(DISTINCT session_id) as session_count,
+      COUNT(*) as message_count
+    FROM token_usage
+    WHERE created_at > datetime('now', '-' || ? || ' days')
+    GROUP BY day, source
+    ORDER BY day DESC, total_cost DESC
+  `).all(days);
+  
+  if (stats.length === 0) {
+    console.log('No usage data found.');
+    return;
+  }
+  
+  console.log(`\n💰 Daily Costs by Source (last ${days} days)\n`);
+  
+  let currentDay = null;
+  let dayTotal = 0;
+  let grandTotal = 0;
+  
+  for (const row of stats) {
+    if (row.day !== currentDay) {
+      if (currentDay !== null) {
+        console.log(`    Day Total: ${formatCost(dayTotal)}`);
+        console.log('');
+      }
+      currentDay = row.day;
+      dayTotal = 0;
+      console.log(`  📅 ${row.day}`);
+    }
+    console.log(`    ${row.source}: ${formatCost(row.total_cost)} (${row.session_count} sessions, ${row.message_count} messages)`);
+    dayTotal += row.total_cost;
+    grandTotal += row.total_cost;
+  }
+  
+  // Print the last day's total
+  if (currentDay !== null) {
+    console.log(`    Day Total: ${formatCost(dayTotal)}`);
+    console.log('');
+  }
+  
+  console.log(`  ─────────────────────`);
+  console.log(`  Grand Total: ${formatCost(grandTotal)}`);
+  console.log('');
+}
+
 function costsAlertStatus() {
   const fs = require('fs');
   const path = require('path');
@@ -789,6 +840,7 @@ COSTS
   costs all                              All-time total
   costs alert-status                     Cost alert status and history
   costs by-source [--days 7]             Costs grouped by source
+  costs daily-by-source [--days 7]       Daily costs broken down by source
 
 ERRORS
   errors                                 Show unresolved errors
@@ -891,6 +943,9 @@ try {
           break;
         case 'by-source':
           costsBySource(flags.days ? parseInt(flags.days) : 7);
+          break;
+        case 'daily-by-source':
+          costsDailyBySource(flags.days ? parseInt(flags.days) : 7);
           break;
         default:
           costsToday();
