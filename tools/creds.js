@@ -16,6 +16,7 @@ const command = args[0];
 
 function mask(value) {
   if (!value) return '(not set)';
+  if (typeof value !== 'string') value = String(value);
   if (value.length <= 8) return '***';
   return value.slice(0, 6) + '...' + value.slice(-4);
 }
