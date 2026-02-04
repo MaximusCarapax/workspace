@@ -25,26 +25,45 @@ function saveState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
-function detectSessionSource(firstUserMessage) {
-  if (!firstUserMessage) return 'main';
+function detectSessionSource(firstUserMessage, messageCount) {
+  if (!firstUserMessage) return 'unknown';
   
-  const message = firstUserMessage;
+  // Rule 5: If session has > 500 messages → probably 'main' (long-running session)
+  if (messageCount > 500) {
+    return 'main';
+  }
   
-  if (message.includes('HEARTBEAT.md')) {
+  // Rule 1: If first user message starts with '[Telegram' or contains 'id:5071818415' → 'main' (Jason's Telegram)
+  if (firstUserMessage.startsWith('[Telegram') || firstUserMessage.includes('id:5071818415')) {
+    return 'main';
+  }
+  
+  // Rule 2: If first user message is EXACTLY the heartbeat prompt or starts with 'Read HEARTBEAT.md' → 'heartbeat'
+  // The exact heartbeat prompt may vary, but we can check for key phrases
+  if (firstUserMessage.trim() === 'Read HEARTBEAT.md' || 
+      firstUserMessage.startsWith('Read HEARTBEAT.md') ||
+      firstUserMessage.includes('HEARTBEAT.md') && 
+      (firstUserMessage.includes('Read') || firstUserMessage.includes('read'))) {
     return 'heartbeat';
   }
-  if (message.includes('Night Shift')) {
+  
+  // Rule 3: If contains 'Night Shift' AND session has < 100 messages → 'cron:night-shift'
+  if (firstUserMessage.includes('Night Shift') && messageCount < 100) {
     return 'cron:night-shift';
   }
-  if (message.includes('Morning Briefing') || message.includes('morning briefing')) {
+  
+  // Rule 4: If contains 'Morning Briefing' AND session has < 50 messages → 'cron:morning-briefing'
+  if ((firstUserMessage.includes('Morning Briefing') || firstUserMessage.includes('morning briefing')) && 
+      messageCount < 50) {
     return 'cron:morning-briefing';
   }
   
-  return 'main';
+  // If none of the above rules match, return 'unknown'
+  return 'unknown';
 }
 
 function determineSource(firstUserMessage) {
-  if (!firstUserMessage) return 'main';
+  if (!firstUserMessage) return 'unknown';
   
   const message = firstUserMessage.toLowerCase();
   
@@ -68,7 +87,7 @@ function determineSource(firstUserMessage) {
     return 'cron:x-post';
   }
   
-  return 'main';
+  return 'unknown';
 }
 
 async function processSessionFile(filePath, state) {
@@ -99,14 +118,31 @@ async function processSessionFile(filePath, state) {
     }
   }
 
-  // Determine source based on first user message
-  source = detectSessionSource(firstUserMessage);
-  
-  // Reopen the file for processing
+  // Reopen the file for processing to count messages and process usage
   const fileStream2 = fs.createReadStream(filePath);
   const rl2 = readline.createInterface({ input: fileStream2, crlfDelay: Infinity });
 
+  // First, count total messages in the session to help with source detection
+  let totalMessageCount = 0;
   for await (const line of rl2) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry.type === 'message') {
+        totalMessageCount++;
+      }
+    } catch (e) {
+      // Skip malformed lines
+    }
+  }
+
+  // Determine source based on first user message and total message count
+  source = detectSessionSource(firstUserMessage, totalMessageCount);
+  
+  // Reopen the file again for actual processing
+  const fileStream3 = fs.createReadStream(filePath);
+  const rl3 = readline.createInterface({ input: fileStream3, crlfDelay: Infinity });
+
+  for await (const line of rl3) {
     try {
       const entry = JSON.parse(line);
       
@@ -139,7 +175,11 @@ async function processSessionFile(filePath, state) {
           tokensOut: usage.output || 0,
           costUsd: cost,
           taskType: 'conversation',
-          taskDetail: source === 'heartbeat' ? 'heartbeat session' : 'main session',
+          taskDetail: source === 'heartbeat' ? 'heartbeat session' : 
+                     source === 'main' ? 'main session' : 
+                     source === 'cron:night-shift' ? 'night shift session' :
+                     source === 'cron:morning-briefing' ? 'morning briefing session' :
+                     'unknown session',
           latencyMs: null
         });
         
