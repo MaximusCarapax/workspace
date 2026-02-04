@@ -770,6 +770,7 @@ COSTS
   costs month                            By model (30 days)
   costs all                              All-time total
   costs alert-status                     Cost alert status and history
+  costs by-source [--days 7]             Costs grouped by source
 
 ERRORS
   errors                                 Show unresolved errors
@@ -869,6 +870,9 @@ try {
           break;
         case 'alert-status':
           costsAlertStatus();
+          break;
+        case 'by-source':
+          costsBySource(flags.days ? parseInt(flags.days) : 7);
           break;
         default:
           costsToday();
