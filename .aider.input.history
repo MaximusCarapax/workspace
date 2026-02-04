@@ -70,3 +70,37 @@
 
 # 2026-02-04 21:35:53.789975
 +Update the builder.md and spec-writer.md templates to include activity logging hooks before completion. Add JavaScript code snippets that log activities using require('../lib/activity').log(). For builder, log 'build_completed' with category 'build'. For spec-writer, log 'spec_completed' with category 'spec'. Include metadata with relevant file paths.
+
+# 2026-02-04 23:22:35.152484
++Add heartbeat cost tracking to tools/db.js:
++
++1. Add a new 'heartbeat-costs' command that:
++   - Queries activity logs where action starts with 'heartbeat_'
++   - Looks for metadata.input_tokens and metadata.output_tokens
++   - Calculates cost per heartbeat using Haiku 4.5 pricing: input sh.80/M, output /M
++   - Shows: total heartbeats, total cost, average cost per heartbeat, daily average
++   - Filter by --since (default 7 days)
++
++2. The activity log entries will have this structure:
++   - category: 'heartbeat'
++   - action: 'heartbeat_complete'
++   - metadata: { input_tokens: number, output_tokens: number, cost_usd: number }
++
++Just add the reporting command - the logging will be done by the heartbeat process itself.
+
+# 2026-02-04 23:22:35.153247
++Add heartbeat cost tracking to tools/db.js:
++
++1. Add a new 'heartbeat-costs' command that:
++   - Queries activity logs where action starts with 'heartbeat_'
++   - Looks for metadata.input_tokens and metadata.output_tokens
++   - Calculates cost per heartbeat using Haiku 4.5 pricing: input sh.80/M, output /M
++   - Shows: total heartbeats, total cost, average cost per heartbeat, daily average
++   - Filter by --since (default 7 days)
++
++2. The activity log entries will have this structure:
++   - category: 'heartbeat'
++   - action: 'heartbeat_complete'
++   - metadata: { input_tokens: number, output_tokens: number, cost_usd: number }
++
++Just add the reporting command - the logging will be done by the heartbeat process itself.

@@ -165,7 +165,18 @@ Check if any cron jobs failed or were missed. If something important failed:
 
 ---
 
-## 10. Response Format
+## 10. Token Tracking (Always, at end)
+Log your token usage for cost tracking:
+```bash
+node tools/db.js activity add "heartbeat_complete" --category heartbeat --metadata '{"input_tokens":3000,"output_tokens":OUTPUT_TOKENS}'
+```
+- Input tokens: estimate ~3000 (system prompt + HEARTBEAT.md + tool outputs)
+- Output tokens: count your response words × 1.3, round to nearest 100
+- Example: 400 word response ≈ 500 output tokens
+
+---
+
+## 11. Response Format
 
 **If everything OK:**
 ```
@@ -190,4 +201,5 @@ Message Jason directly with:
 - You're on Haiku (cheap) — be fast, don't overthink
 - Cron jobs handle scheduled work — you handle health + catch-up
 - Log everything to activity system for history
+- **Always log token usage at end** (for cost tracking)
 - Silence = success
