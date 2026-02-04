@@ -5,6 +5,8 @@
  */
 
 const db = require('../lib/db');
+const activity = require('../lib/activity');
+const activity = require('../lib/activity');
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -298,18 +300,109 @@ function errorsResolve(id) {
 // ACTIVITY
 // ============================================================
 
-function activityShow(limit = 20) {
-  const activity = db.getRecentActivity(limit);
-  if (activity.length === 0) {
-    console.log('No activity recorded.');
+// Import the activity service
+const activity = require('../lib/activity');
+
+function activityShow(options = {}) {
+  const {
+    limit = 20,
+    category,
+    since,
+    until,
+    action,
+    search
+  } = options;
+  
+  let activities;
+  
+  // Handle different filtering scenarios
+  if (since || until) {
+    // Use date range filtering
+    const startDate = since || '1970-01-01';
+    const endDate = until || new Date().toISOString().split('T')[0];
+    activities = activity.getActivitiesByDate(startDate, endDate, limit);
+  } else if (action) {
+    // Filter by action
+    activities = activity.getActivitiesByAction(action, limit);
+  } else if (category) {
+    // Filter by category
+    activities = activity.getActivitiesByCategory(category, limit);
+  } else {
+    // Default to recent activities
+    activities = activity.getRecent(limit);
+  }
+  
+  // Apply search filter if provided
+  if (search && activities.length > 0) {
+    const searchLower = search.toLowerCase();
+    activities = activities.filter(act => 
+      (act.description && act.description.toLowerCase().includes(searchLower)) ||
+      (act.action && act.action.toLowerCase().includes(searchLower)) ||
+      (act.category && act.category.toLowerCase().includes(searchLower))
+    );
+  }
+  
+  if (activities.length === 0) {
+    console.log('No activity recorded matching the criteria.');
     return;
   }
   
-  console.log('\n📜 Recent Activity\n');
-  for (const act of activity) {
-    console.log(`  ${formatDate(act.created_at)}`);
+  console.log('\n📜 Activity Log\n');
+  console.log(`  Found ${activities.length} activities`);
+  if (category) console.log(`  Category: ${category}`);
+  if (action) console.log(`  Action: ${action}`);
+  if (since) console.log(`  Since: ${since}`);
+  if (until) console.log(`  Until: ${until}`);
+  if (search) console.log(`  Search: "${search}"`);
+  console.log('');
+  
+  for (const act of activities) {
+    const categoryStr = act.category ? ` [${act.category}]` : '';
+    console.log(`  ${formatDate(act.created_at)}${categoryStr}`);
     console.log(`    ${act.action}: ${act.description || ''}`);
+    if (act.metadata) {
+      try {
+        const meta = JSON.parse(act.metadata);
+        if (Object.keys(meta).length > 0) {
+          console.log(`    Metadata: ${JSON.stringify(meta)}`);
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
   }
+  console.log('');
+}
+
+function activitySummary() {
+  const digest = activity.getDigest({ period: 'day', limit: 10 });
+  
+  console.log('\n📊 Activity Summary (Last 24 Hours)\n');
+  console.log(`  Total activities: ${digest.stats.total}`);
+  console.log(`  Unique actions: ${digest.stats.unique_actions}`);
+  console.log(`  Unique categories: ${digest.stats.unique_categories}`);
+  console.log(`  Most common action: ${digest.stats.most_common_action || 'N/A'}`);
+  console.log(`  Most common category: ${digest.stats.most_common_category || 'N/A'}`);
+  console.log('');
+  
+  if (digest.recent_activities.length > 0) {
+    console.log('  Recent activities:');
+    for (const act of digest.recent_activities.slice(0, 5)) {
+      console.log(`    ${formatDate(act.created_at)} ${act.action}: ${act.description?.substring(0, 50)}${act.description?.length > 50 ? '...' : ''}`);
+    }
+  }
+  console.log('');
+}
+
+function activityStats(period = 'day') {
+  const stats = activity.getStats(period);
+  
+  console.log(`\n📈 Activity Statistics (Last ${period})\n`);
+  console.log(`  Total activities: ${stats.total}`);
+  console.log(`  Unique actions: ${stats.unique_actions}`);
+  console.log(`  Unique categories: ${stats.unique_categories}`);
+  console.log(`  Most common action: ${stats.most_common_action || 'N/A'}`);
+  console.log(`  Most common category: ${stats.most_common_category || 'N/A'}`);
   console.log('');
 }
 
@@ -535,7 +628,10 @@ ERRORS
   errors resolve <id>                    Mark resolved
 
 ACTIVITY
-  activity [--limit 20]                  Recent activity
+  activity [--limit 20] [--category <cat>] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--action <act>] [--search <text>]
+                                         Filtered activity log
+  activity summary                       Daily summary with statistics
+  activity stats [--period day|week|month] Activity statistics
 
 HEALTH
   health                                 Integration status
@@ -637,7 +733,22 @@ try {
       break;
       
     case 'activity':
-      activityShow(flags.limit ? parseInt(flags.limit) : 20);
+      if (subcommand === 'summary') {
+        activitySummary();
+      } else if (subcommand === 'stats') {
+        activityStats(flags.period || 'day');
+      } else {
+        // Handle filtering flags
+        const options = {
+          limit: flags.limit ? parseInt(flags.limit) : 20,
+          category: flags.category || null,
+          since: flags.since || null,
+          until: flags.until || null,
+          action: flags.action || null,
+          search: flags.search || null
+        };
+        activityShow(options);
+      }
       break;
       
     case 'health':
