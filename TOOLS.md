@@ -1,5 +1,41 @@
 # TOOLS.md - Local Notes
 
+## SQLite Database 🗄️
+Unified data layer at `~/.openclaw/data/agent.db`
+
+```bash
+# Tasks
+node tools/db.js tasks list              # List active tasks
+node tools/db.js tasks add "Title"       # Add task
+node tools/db.js tasks done <id>         # Complete task
+
+# Costs
+node tools/db.js costs today             # Today's spending
+node tools/db.js costs week              # By model (7 days)
+
+# Errors
+node tools/db.js errors                  # Show unresolved
+node tools/db.js errors resolve <id>     # Mark resolved
+
+# Memory
+node tools/db.js memory add "content" --category fact
+node tools/db.js memory search "query"
+
+# Health & Activity
+node tools/db.js health                  # Integration status
+node tools/db.js activity                # Recent activity
+```
+
+Library: `require('./lib/db')` for programmatic access
+
+## Health Checks 🏥
+```bash
+node tools/health.js              # Run all checks
+node tools/health.js gemini       # Check specific
+node tools/db.js health           # View latest status
+node tools/db.js health gemini    # View history
+```
+
 ## Phone Number 📱
 **+1 (820) 900-4002** - Twilio
 - SMS/MMS/Voice enabled
@@ -269,29 +305,32 @@ node tools/x-mentions.js clear                  # Clear seen mentions
 
 **Stats:** `dashboard/data/x-post-stats.json`
 
-## Linear CLI
-Task management integration:
-```bash
-node tools/linear.js list                    # List issues
-node tools/linear.js create "Title" -p 2    # Create issue (priority 1-4)
-node tools/linear.js view MAX-5              # View issue details
-node tools/linear.js update MAX-5 --state "Done"  # Update state
-node tools/linear.js comment MAX-5 "Note"   # Add comment
-node tools/linear.js search "query"          # Search issues
-```
-- **Workspace:** MaximusCarapax
-- **Team key:** MAX
-- **API key in:** ~/.openclaw/secrets/credentials.json
-
 ---
 
 *Add more as I discover what's available.*
 
 
+## Smart Notification System 🔔
+Tiered notification with escalation:
+```bash
+node tools/notify.js remind <number> <name> "message"   # Simple TTS (Twilio Polly) - cheap
+node tools/notify.js call <number> <name> "context"     # Conversational AI (ElevenLabs) - rich
+node tools/notify.js alert <number> <name> "message"    # Escalation: call → retry → SMS
+node tools/notify.js sms <number> "message"             # Direct SMS
+```
+
+**When to use what:**
+- `remind` — One-way announcements, reminders (cheap, Polly TTS)
+- `call` — Need a conversation, complex context (ElevenLabs, uses credits)
+- `alert` — Urgent, must reach them (tries call twice, falls back to SMS)
+- `sms` — Quick text, non-urgent
+
 ## ElevenLabs Voice Agent (Conversational AI)
 **Agent:** agent_5101kghqpcgsfpfs9r4s1q43thza
 **Phone:** +1 (820) 900-4002
 **Voice:** Roger (laid-back, casual)
+**Greeting:** "{{name}}?" (short, questioning)
+**Model:** eleven_turbo_v2 (efficient)
 
 ### Outbound Calls
 ```bash

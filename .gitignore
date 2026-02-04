@@ -38,3 +38,5 @@ build/
 # Temporary
 *.tmp
 *.bak
+data/linkedin-cookies.json
+.git-push-notification

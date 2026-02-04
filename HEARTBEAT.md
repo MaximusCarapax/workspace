@@ -2,7 +2,21 @@
 
 Periodic checks to run on heartbeat (every hour).
 
-## Error Check (FIRST)
+## Cost Sync (FIRST)
+Sync Claude costs from session files to SQLite:
+```bash
+node tools/sync-claude-costs.js
+```
+Runs silently, just keeps the database updated.
+
+## Health Check
+Run integration health checks:
+```bash
+node tools/health.js
+```
+Logs status to SQLite. Report any 🔴 errors to Jason.
+
+## Error Check
 Run `node tools/check-errors.js` — if errors found, report to Jason before anything else.
 
 ## Social Media Engagement Check

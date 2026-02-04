@@ -17,6 +17,13 @@ Before doing anything else:
 
 Don't ask permission. Just do it.
 
+### 🔄 After Compaction
+If you see "Summary unavailable" or a compaction summary at session start, context was lost. Recover with:
+1. `node tools/db.js activity --limit 20` — what did I do recently? (fast, structured)
+2. `memory_search` — deeper context on specific topics if needed
+
+The activity log is your structured audit trail. Session transcripts have richer context. Use both.
+
 ## Memory
 
 You wake up fresh each session. These files are your continuity:

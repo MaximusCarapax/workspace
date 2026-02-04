@@ -1,36 +1,70 @@
 #!/usr/bin/env node
 /**
- * Gemini CLI wrapper - free tier, rate-limit aware
+ * Gemini CLI wrapper - free tier with OpenRouter fallback
  * 
  * Usage:
  *   node gemini.js "your prompt here"
  *   node gemini.js -m gemini-2.5-flash "prompt"
- *   echo "prompt" | node gemini.js -
  *   node gemini.js -f file.txt "explain this code"
+ *   node gemini.js --no-fallback "prompt"  # Disable OpenRouter fallback
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// Load API key from .env
+// Load API keys - collect all Gemini keys for fallback chain
 const envPath = path.join(__dirname, '..', '.env');
-let API_KEY = process.env.GEMINI_API_KEY;
-if (!API_KEY && fs.existsSync(envPath)) {
+const GEMINI_KEYS = [];
+let OPENROUTER_KEY = null;
+
+// Read from .env
+if (fs.existsSync(envPath)) {
   const env = fs.readFileSync(envPath, 'utf8');
-  const match = env.match(/GEMINI_API_KEY=(.+)/);
-  if (match) API_KEY = match[1].trim();
+  const geminiMatch = env.match(/GEMINI_API_KEY=(.+)/m);
+  if (geminiMatch) GEMINI_KEYS.push(geminiMatch[1].trim());
+  const gemini2Match = env.match(/GEMINI_API_KEY_2=(.+)/m);
+  if (gemini2Match && gemini2Match[1].trim() !== GEMINI_KEYS[0]) {
+    GEMINI_KEYS.push(gemini2Match[1].trim());
+  }
+  const orMatch = env.match(/OPENROUTER_API_KEY=(.+)/m);
+  if (orMatch) OPENROUTER_KEY = orMatch[1].trim();
 }
 
-if (!API_KEY) {
-  console.error('Error: GEMINI_API_KEY not found in environment or .env');
-  process.exit(1);
+// Read from credentials.json (backup key)
+try {
+  const creds = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.openclaw/secrets/credentials.json')));
+  if (creds.gemini?.apiKey && !GEMINI_KEYS.includes(creds.gemini.apiKey)) {
+    GEMINI_KEYS.push(creds.gemini.apiKey);
+  }
+} catch {}
+
+// Environment variables as last resort
+if (GEMINI_KEYS.length === 0 && process.env.GEMINI_API_KEY) {
+  GEMINI_KEYS.push(process.env.GEMINI_API_KEY);
 }
+if (!OPENROUTER_KEY) OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+
+// Try OpenRouter secrets file
+if (!OPENROUTER_KEY) {
+  try {
+    const secrets = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.openclaw/secrets/openrouter.json')));
+    OPENROUTER_KEY = secrets.api_key;
+  } catch {}
+}
+
+// Model mapping for OpenRouter fallback
+const OPENROUTER_MODELS = {
+  'gemini-2.5-flash': 'google/gemini-2.5-flash-preview',
+  'gemini-2.0-flash': 'google/gemini-2.0-flash-001',
+  'gemini-2.5-pro': 'google/gemini-2.5-pro-preview',
+};
 
 // Parse args
 const args = process.argv.slice(2);
-let model = 'gemini-2.5-flash';  // Default to 2.5-flash (2.0 has tighter limits)
+let model = 'gemini-2.5-flash';
 let fileContext = null;
 let prompt = null;
+let allowFallback = true;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '-m' && args[i + 1]) {
@@ -45,28 +79,51 @@ for (let i = 0; i < args.length; i++) {
       process.exit(1);
     }
   } else if (args[i] === '-') {
-    // Read from stdin
     prompt = fs.readFileSync(0, 'utf8').trim();
+  } else if (args[i] === '--no-fallback') {
+    allowFallback = false;
   } else if (!prompt) {
     prompt = args[i];
   }
 }
 
 if (!prompt) {
-  console.error('Usage: gemini.js [-m model] [-f file] "prompt"');
+  console.error('Usage: gemini.js [-m model] [-f file] [--no-fallback] "prompt"');
   console.error('Models: gemini-2.5-flash (default), gemini-2.0-flash, gemini-2.5-pro');
+  console.error('Falls back to OpenRouter if Gemini quota exceeded.');
   process.exit(1);
 }
 
-// Build full prompt with file context
 if (fileContext) {
   prompt = `File contents:\n\`\`\`\n${fileContext}\n\`\`\`\n\n${prompt}`;
 }
 
-async function callGemini(prompt, retries = 3) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`;
+// Log usage to SQLite
+function logUsage(provider, modelName, tokensIn, tokensOut, cost) {
+  try {
+    const db = require('../lib/db');
+    db.logUsage({
+      model: modelName,
+      provider: provider,
+      tokensIn: tokensIn || 0,
+      tokensOut: tokensOut || 0,
+      costUsd: cost || 0,
+      taskType: 'tool',
+      taskDetail: 'gemini.js CLI'
+    });
+  } catch {}
+}
+
+// Call Gemini directly (free tier) - tries multiple keys
+async function callGemini(prompt) {
+  if (GEMINI_KEYS.length === 0) {
+    throw new Error('No GEMINI_API_KEY found');
+  }
   
-  for (let attempt = 1; attempt <= retries; attempt++) {
+  for (let keyIndex = 0; keyIndex < GEMINI_KEYS.length; keyIndex++) {
+    const apiKey = GEMINI_KEYS[keyIndex];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -83,35 +140,103 @@ async function callGemini(prompt, retries = 3) {
       const data = await res.json();
 
       if (data.error) {
-        // Rate limit - wait and retry
-        if (data.error.code === 429) {
-          const retryMatch = data.error.message.match(/retry in ([\d.]+)s/i);
-          const waitTime = retryMatch ? parseFloat(retryMatch[1]) + 1 : 30;
-          
-          if (attempt < retries) {
-            console.error(`Rate limited. Waiting ${waitTime}s... (attempt ${attempt}/${retries})`);
-            await new Promise(r => setTimeout(r, waitTime * 1000));
+        // Rate limit or quota - try next key
+        if (data.error.code === 429 || data.error.message?.includes('quota') || 
+            data.error.message?.includes('exhausted') || data.error.message?.includes('expired')) {
+          if (keyIndex < GEMINI_KEYS.length - 1) {
+            console.error(`⚡ Key ${keyIndex + 1} quota exceeded, trying key ${keyIndex + 2}...`);
             continue;
           }
+          throw new Error(`QUOTA_EXCEEDED: ${data.error.message}`);
         }
-        console.error(`Error: ${data.error.message}`);
-        process.exit(1);
+        throw new Error(data.error.message);
       }
 
-      // Extract response text
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (text) {
-        console.log(text);
-        return;
-      } else {
-        console.error('No response generated');
+        const usage = data.usageMetadata || {};
+        logUsage('gemini', model, usage.promptTokenCount, usage.candidatesTokenCount, 0);
+        if (keyIndex > 0) console.error(`[Used Gemini key ${keyIndex + 1}]`);
+        return text;
+      }
+      
+      throw new Error('No response generated');
+    } catch (err) {
+      // If it's a quota error and we have more keys, continue
+      if (err.message.includes('QUOTA_EXCEEDED') && keyIndex < GEMINI_KEYS.length - 1) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  
+  throw new Error('All Gemini keys exhausted');
+}
+
+// Call OpenRouter as fallback
+async function callOpenRouter(prompt) {
+  if (!OPENROUTER_KEY) {
+    throw new Error('OPENROUTER_API_KEY not found for fallback');
+  }
+  
+  const orModel = OPENROUTER_MODELS[model] || 'google/gemini-2.0-flash-001';
+  console.error(`⚡ Falling back to OpenRouter (${orModel})...`);
+  
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://openclaw.ai',
+      'X-Title': 'OpenClaw Gemini Fallback'
+    },
+    body: JSON.stringify({
+      model: orModel,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`OpenRouter error: ${res.status} - ${error}`);
+  }
+
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content;
+  
+  if (text) {
+    const usage = data.usage || {};
+    // OpenRouter charges ~$0.10/M for Gemini Flash
+    const cost = ((usage.prompt_tokens || 0) * 0.075 + (usage.completion_tokens || 0) * 0.30) / 1_000_000;
+    logUsage('openrouter', orModel, usage.prompt_tokens, usage.completion_tokens, cost);
+    console.error(`[OpenRouter: ${usage.prompt_tokens || 0} in / ${usage.completion_tokens || 0} out | $${cost.toFixed(6)}]`);
+    return text;
+  }
+  
+  throw new Error('No response from OpenRouter');
+}
+
+// Main
+async function main() {
+  try {
+    // Try Gemini first (free)
+    const result = await callGemini(prompt);
+    console.log(result);
+  } catch (err) {
+    // If quota exceeded and fallback allowed, try OpenRouter
+    if (allowFallback && OPENROUTER_KEY && err.message.includes('QUOTA_EXCEEDED')) {
+      try {
+        const result = await callOpenRouter(prompt);
+        console.log(result);
+      } catch (fallbackErr) {
+        console.error(`Fallback failed: ${fallbackErr.message}`);
         process.exit(1);
       }
-    } catch (err) {
-      console.error(`Request failed: ${err.message}`);
-      if (attempt === retries) process.exit(1);
+    } else {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
     }
   }
 }
 
-callGemini(prompt);
+main();

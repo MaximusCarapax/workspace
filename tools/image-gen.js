@@ -144,9 +144,25 @@ Examples:
       console.log('Raw response:', JSON.stringify(result, null, 2).slice(0, 500));
     }
     
-    // Show usage stats
+    // Show usage stats and log to SQLite
     if (result.usage) {
       console.log(`\nTokens: ${result.usage.prompt_tokens} in, ${result.usage.completion_tokens} out`);
+      
+      // Log to SQLite
+      try {
+        const db = require('../lib/db');
+        db.logUsage({
+          model: MODELS[model] || model,
+          provider: 'openrouter',
+          tokensIn: result.usage.prompt_tokens || 0,
+          tokensOut: result.usage.completion_tokens || 0,
+          costUsd: result.usage.total_cost || null, // OpenRouter may include this
+          taskType: 'image',
+          taskDetail: 'image-gen.js'
+        });
+      } catch (e) {
+        // Silently fail if db not available
+      }
     }
   } catch (err) {
     console.error('Error:', err.message);

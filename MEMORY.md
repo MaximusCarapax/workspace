@@ -27,7 +27,8 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - **Keep Opus as main engine** — Jason values the personality and intelligence, don't downgrade the core
 
 ## My Accounts & Access
-- **Gmail:** maximuscarapax@gmail.com (browser session active)
+- **ProtonMail:** maximuscarapax@proton.me (primary email now)
+- **Gmail:** maximuscarapax@gmail.com (DISABLED by Google 2026-02-04)
 - **Jason's Gmail:** jason.x.wu.27@gmail.com (API access — read/organize/draft, NO send)
 - **Brave Search API:** Configured and working (key in gateway config)
 - **Jason's Calendar:** "😤 Jason" shared with me
