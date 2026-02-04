@@ -165,18 +165,18 @@ node tools/captcha-solver.js solve <sitekey> <url> --hcaptcha  # Solve hCaptcha
 - **Account:** maximuscarapax@gmail.com
 - Can be imported and used in other scripts via `require('./captcha-solver.js')`
 
-## Gemini CLI (FREE - FIRST CHOICE)
-Custom wrapper with rate-limit handling:
+## Gemini CLI (via OpenRouter - no rate limits)
+Custom wrapper defaulting to OpenRouter (no rate limits):
 ```bash
 node tools/gemini.js "your prompt"
 node tools/gemini.js -m 2.0-flash "prompt"     # specific model
 node tools/gemini.js -f code.js "explain this" # with file context
+node tools/gemini.js --no-fallback "prompt"    # direct Gemini only (free but rate limited)
 ```
-- **Cost:** FREE (up to quota limits)
-- **Default model:** gemini-2.5-flash (better limits than 2.0)
+- **Cost:** ~$0.10/M input, $0.40/M output via OpenRouter
+- **Default:** OpenRouter Gemini (no rate limits)
+- **Fallback:** Direct Gemini API if OpenRouter fails
 - **Use for:** Summarization, boilerplate generation, code explanation, one-shot tasks
-- **NOT for:** Iterative debug loops (use Aider + DeepSeek instead)
-- **Fallback:** Auto-retries on rate limit, or use DeepSeek if persistent
 
 ## Aider + DeepSeek (PRIMARY CODING TOOL)
 ```bash

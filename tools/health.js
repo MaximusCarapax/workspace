@@ -125,22 +125,38 @@ const checks = {
 
   async twitter() {
     try {
+      // Check for Bird CLI cookies in .env (primary method)
+      const envPath = path.join(process.env.HOME, '.openclaw/workspace/.env');
+      let hasBirdCreds = false;
+      if (fs.existsSync(envPath)) {
+        const env = fs.readFileSync(envPath, 'utf8');
+        hasBirdCreds = env.includes('AUTH_TOKEN=') && env.includes('CT0=');
+      }
+      
+      // Check for API bearer token in credentials.json (fallback)
       const credsPath = path.join(process.env.HOME, '.openclaw/secrets/credentials.json');
-      const creds = JSON.parse(fs.readFileSync(credsPath));
-      if (!creds.twitter?.apiKey) {
+      let hasApiCreds = false;
+      if (fs.existsSync(credsPath)) {
+        const creds = JSON.parse(fs.readFileSync(credsPath));
+        hasApiCreds = !!(creds.twitter?.bearerToken || creds.twitter?.apiKey);
+      }
+      
+      if (!hasBirdCreds && !hasApiCreds) {
         return { status: 'error', message: 'No Twitter credentials' };
       }
+      
       // Check monthly usage from stats file
       const statsPath = path.join(process.env.HOME, '.openclaw/workspace/dashboard/data/x-post-stats.json');
       if (fs.existsSync(statsPath)) {
         const stats = JSON.parse(fs.readFileSync(statsPath));
         const reads = stats.monthlyReads || 0;
+        const method = hasBirdCreds ? 'Bird+API' : 'API only';
         if (reads > 90) {
-          return { status: 'degraded', message: `${reads}/100 reads used` };
+          return { status: 'degraded', message: `${reads}/100 reads (${method})` };
         }
-        return { status: 'ok', message: `${reads}/100 reads this month` };
+        return { status: 'ok', message: `${reads}/100 reads (${method})` };
       }
-      return { status: 'ok', message: 'Credentials configured' };
+      return { status: 'ok', message: hasBirdCreds ? 'Bird CLI configured' : 'API configured' };
     } catch (e) {
       return { status: 'error', message: e.message };
     }

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Gemini CLI wrapper - free tier with OpenRouter fallback
+ * Gemini CLI wrapper - uses OpenRouter by default (no rate limits)
  * 
  * Usage:
  *   node gemini.js "your prompt here"
  *   node gemini.js -m gemini-2.5-flash "prompt"
  *   node gemini.js -f file.txt "explain this code"
- *   node gemini.js --no-fallback "prompt"  # Disable OpenRouter fallback
+ *   node gemini.js --no-fallback "prompt"  # Direct Gemini only (free but rate limited)
  */
 
 const fs = require('fs');
@@ -52,11 +52,11 @@ if (!OPENROUTER_KEY) {
   } catch {}
 }
 
-// Model mapping for OpenRouter fallback
+// Model mapping for OpenRouter
 const OPENROUTER_MODELS = {
-  'gemini-2.5-flash': 'google/gemini-2.5-flash-preview',
+  'gemini-2.5-flash': 'google/gemini-2.0-flash-001',  // 2.5 not on OR yet, use 2.0
   'gemini-2.0-flash': 'google/gemini-2.0-flash-001',
-  'gemini-2.5-pro': 'google/gemini-2.5-pro-preview',
+  'gemini-2.5-pro': 'google/gemini-2.0-flash-001',    // Fallback to flash
 };
 
 // Parse args
@@ -180,7 +180,6 @@ async function callOpenRouter(prompt) {
   }
   
   const orModel = OPENROUTER_MODELS[model] || 'google/gemini-2.0-flash-001';
-  console.error(`⚡ Falling back to OpenRouter (${orModel})...`);
   
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -218,24 +217,26 @@ async function callOpenRouter(prompt) {
 
 // Main
 async function main() {
+  // Default: Use OpenRouter (no rate limits)
+  // Fallback: Direct Gemini API (free but rate limited)
+  
+  if (OPENROUTER_KEY && allowFallback) {
+    try {
+      const result = await callOpenRouter(prompt);
+      console.log(result);
+      return;
+    } catch (err) {
+      console.error(`⚡ OpenRouter failed (${err.message}), trying direct Gemini...`);
+    }
+  }
+  
+  // Fallback to direct Gemini
   try {
-    // Try Gemini first (free)
     const result = await callGemini(prompt);
     console.log(result);
   } catch (err) {
-    // If quota exceeded and fallback allowed, try OpenRouter
-    if (allowFallback && OPENROUTER_KEY && err.message.includes('QUOTA_EXCEEDED')) {
-      try {
-        const result = await callOpenRouter(prompt);
-        console.log(result);
-      } catch (fallbackErr) {
-        console.error(`Fallback failed: ${fallbackErr.message}`);
-        process.exit(1);
-      }
-    } else {
-      console.error(`Error: ${err.message}`);
-      process.exit(1);
-    }
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
   }
 }
 
