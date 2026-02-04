@@ -28,6 +28,27 @@ node tools/db.js activity                # Recent activity
 
 Library: `require('./lib/db')` for programmatic access
 
+## Model Router 🔀
+Automatic task routing to cheapest capable model:
+```bash
+node tools/route.js "your prompt"                 # Auto-detect task type
+node tools/route.js --type code "prompt"          # Explicit task type
+node tools/route.js --provider deepseek "prompt"  # Force provider
+node tools/route.js --content file.txt "prompt"   # Include file content
+node tools/route.js --dry-run "prompt"            # Preview routing
+node tools/route.js stats                         # View routing stats
+node tools/route.js config                        # View routing config
+```
+
+**Routing rules:**
+- summarize, research, extract, translate → **Gemini (FREE)**
+- code, debug, refactor, test → **DeepSeek ($0.14/M)**
+- default → **Gemini (FREE)**
+
+**Fallbacks:** Gemini ↔ DeepSeek (auto-retry on quota/rate limit)
+
+Library: `require('./lib/router').route({ type, prompt, content })`
+
 ## Health Checks 🏥
 ```bash
 node tools/health.js              # Run all checks
