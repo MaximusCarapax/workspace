@@ -39,32 +39,39 @@ const checks = {
   },
 
   async gemini() {
+    // We use OpenRouter for Gemini now (no rate limits)
+    // This check tests OpenRouter's Gemini endpoint
     try {
-      const envPath = path.join(process.env.HOME, '.openclaw/workspace/.env');
-      const env = fs.readFileSync(envPath, 'utf8');
-      const match = env.match(/GEMINI_API_KEY=(.+)/);
-      if (!match) {
-        return { status: 'error', message: 'No API key' };
+      const secretsPath = path.join(process.env.HOME, '.openclaw/secrets/openrouter.json');
+      if (!fs.existsSync(secretsPath)) {
+        return { status: 'error', message: 'No OpenRouter credentials' };
       }
+      const secrets = JSON.parse(fs.readFileSync(secretsPath));
       
-      // Quick test call
-      const key = match[1].trim();
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+      // Quick test call via OpenRouter
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${secrets.api_key}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Say OK' }] }],
-          generationConfig: { maxOutputTokens: 5 }
+          model: 'google/gemini-2.0-flash-001',
+          messages: [{ role: 'user', content: 'Say OK' }],
+          max_tokens: 5
         })
       });
-      const data = await res.json();
-      if (data.error) {
-        if (data.error.code === 429) {
-          return { status: 'degraded', message: 'Rate limited' };
-        }
-        return { status: 'error', message: data.error.message?.slice(0, 50) };
+      
+      if (!res.ok) {
+        const error = await res.text();
+        return { status: 'error', message: `OpenRouter: ${res.status}` };
       }
-      return { status: 'ok', message: 'API responding' };
+      
+      const data = await res.json();
+      if (data.choices?.[0]?.message?.content) {
+        return { status: 'ok', message: 'OpenRouter Gemini ready' };
+      }
+      return { status: 'error', message: 'No response' };
     } catch (e) {
       return { status: 'error', message: e.message };
     }
