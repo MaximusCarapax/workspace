@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Database CLI Tool
- * Manage tasks, costs, errors, memory from command line
+ * Manage backlog, costs, errors, memory from command line
  */
 
 const db = require('../lib/db');
@@ -454,12 +454,12 @@ function showHelp() {
 
 Usage: node tools/db.js <command> [subcommand] [args]
 
-TASKS
-  tasks list [--status todo|done|all]    List tasks
-  tasks backlog                          Smart prioritized view
-  tasks add "Title" [--priority 1-4]     Add task
-  tasks done <id>                        Complete task
-  tasks update <id> --status <status>    Update task
+BACKLOG
+  backlog list [--status todo|done|all]  List all tasks
+  backlog prioritize                     Smart prioritized view
+  backlog add "Title" [--priority 1-4]   Add task
+  backlog done <id>                      Complete task
+  backlog update <id> --status <status>  Update task
 
 COSTS
   costs today                            Today's spending
@@ -516,12 +516,12 @@ try {
   const flags = parseFlags(args);
   
   switch (command) {
-    case 'tasks':
+    case 'backlog':
       switch (subcommand) {
         case 'list':
           tasksList({ status: flags.status === 'all' ? null : flags.status });
           break;
-        case 'backlog':
+        case 'prioritize':
           tasksBacklog();
           break;
         case 'add':
