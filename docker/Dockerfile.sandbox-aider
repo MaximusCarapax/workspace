@@ -1,0 +1,28 @@
+# OpenClaw Sandbox with Aider
+# Build: docker build -t openclaw-sandbox:bookworm-slim -f Dockerfile.sandbox-aider .
+
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/root/.local/bin:$PATH"
+
+# Base packages + pipx
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    jq \
+    python3 \
+    python3-pip \
+    pipx \
+    ripgrep \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install aider via pipx (isolates dependencies)
+RUN pipx install aider-chat
+
+# Ensure pipx binaries are in PATH
+RUN pipx ensurepath
+
+CMD ["sleep", "infinity"]
