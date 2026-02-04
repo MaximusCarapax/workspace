@@ -260,10 +260,102 @@ switch (command) {
       process.exit(1);
     }
     
-    // These will spawn sub-agents - for now just output the prompt
-    console.log(`🤖 Would spawn ${command.toUpperCase()} agent for: ${p.title}`);
-    console.log(`\nThis will be implemented with sessions_spawn integration.`);
-    console.log(`For now, use the pipeline view and manual agent prompts.`);
+    const agents = require('../lib/pipeline-agents');
+    const config = agents.AGENT_ROLES[command];
+    const request = agents.createSpawnRequest(command, p);
+    
+    console.log(`${config.emoji} Spawning ${config.name} for: ${p.title}`);
+    console.log(`   Model: ${config.model}`);
+    console.log(`   Timeout: ${config.timeout}s`);
+    console.log('');
+    
+    // Output JSON for sessions_spawn
+    console.log('─'.repeat(50));
+    console.log('Copy this to spawn the agent:\n');
+    console.log(JSON.stringify(request, null, 2));
+    console.log('');
+    console.log('─'.repeat(50));
+    console.log(`After agent completes, save output with:`);
+    console.log(`  pipeline.js save-output ${id} ${command}`);
+    break;
+  }
+  
+  case 'save-output': {
+    const id = parseInt(args[1]);
+    const role = args[2];
+    
+    if (!id || !role) {
+      console.error('Usage: pipeline.js save-output <id> <role>');
+      console.error('  Then paste the agent output and press Ctrl+D');
+      process.exit(1);
+    }
+    
+    const agents = require('../lib/pipeline-agents');
+    
+    // Read from stdin
+    let output = '';
+    const readline = require('readline');
+    const rl = readline.createInterface({ input: process.stdin });
+    
+    console.log('Paste agent output, then press Ctrl+D:\n');
+    
+    rl.on('line', (line) => { output += line + '\n'; });
+    rl.on('close', () => {
+      if (!output.trim()) {
+        console.error('No output provided.');
+        process.exit(1);
+      }
+      
+      const result = agents.saveAgentOutput(id, role, output.trim());
+      console.log(`\n✅ Saved ${role} output for pipeline #${id}`);
+      
+      const p = db.getPipeline(id);
+      console.log(`   Stage: ${p.stage}`);
+      
+      if (role === 'spec') {
+        const tasks = db.getPipelineTasks(id);
+        if (tasks.length > 0) {
+          console.log(`   Tasks created: ${tasks.length}`);
+        }
+        console.log(`\nNext: Get approval with 'pipeline.js approve ${id}'`);
+      } else if (role === 'build') {
+        console.log(`\nNext: Review with 'pipeline.js review ${id}'`);
+      } else if (role === 'review') {
+        if (p.stage === 'done') {
+          console.log(`\n🎉 Feature complete!`);
+        } else {
+          console.log(`\nReview noted. Fix issues and re-review.`);
+        }
+      }
+    });
+    return; // Don't break - async
+  }
+  
+  case 'prompt': {
+    // Just show the prompt without spawn instructions
+    const id = parseInt(args[1]);
+    const role = args[2] || 'spec';
+    
+    if (!id) {
+      console.error('Usage: pipeline.js prompt <id> [spec|build|review]');
+      process.exit(1);
+    }
+    
+    const p = db.getPipeline(id);
+    if (!p) {
+      console.error(`Pipeline item #${id} not found.`);
+      process.exit(1);
+    }
+    
+    const agents = require('../lib/pipeline-agents');
+    const config = agents.AGENT_ROLES[role];
+    if (!config) {
+      console.error(`Unknown role: ${role}. Use: spec, build, review`);
+      process.exit(1);
+    }
+    
+    const tasks = role === 'build' ? db.getPipelineTasks(id) : [];
+    console.log(config.getPrompt(p, tasks));
     break;
   }
   
@@ -283,18 +375,32 @@ Usage:
   pipeline.js task add <id> "title"       Add a task
   pipeline.js task done <task_id>         Complete a task
 
-Agent Commands (coming soon):
-  pipeline.js spec <id>                   Run Spec Agent (Sonnet)
-  pipeline.js build <id>                  Run Dev Agent (DeepSeek/Aider)
-  pipeline.js review <id>                 Run QA Agent (Haiku)
+Sub-Agent Commands:
+  pipeline.js spec <id>                   Generate Spec Agent spawn config
+  pipeline.js build <id>                  Generate Build Agent spawn config
+  pipeline.js review <id>                 Generate QA Agent spawn config
+  pipeline.js prompt <id> [role]          Show raw prompt for a role
+  pipeline.js save-output <id> <role>     Save agent output (pipe or stdin)
 
 Stages: ${STAGES.join(' → ')}
 
+Workflow:
+  1. add "Feature"        → Creates in 'idea' stage
+  2. spec <id>            → Spawn spec agent, writes spec
+  3. save-output <id> spec → Save spec, extracts tasks
+  4. approve <id>         → Human approves, moves to 'ready'
+  5. build <id>           → Spawn build agent, implements
+  6. save-output <id> build → Save progress
+  7. review <id>          → Spawn QA agent, validates
+  8. save-output <id> review → Pass = done, Fail = fix & retry
+
 Examples:
   pipeline.js add "Build dashboard" --priority 1
-  pipeline.js view 1
+  pipeline.js spec 1
+  # Copy output, run sessions_spawn in main chat
+  # Paste result back:
+  pipeline.js save-output 1 spec
   pipeline.js approve 1
-  pipeline.js stage 1 build
 `);
     break;
 }

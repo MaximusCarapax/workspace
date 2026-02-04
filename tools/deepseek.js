@@ -11,10 +11,10 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-// Pricing per million tokens
+// Pricing per million tokens (V3.2 pricing as of Jan 2026)
 const PRICING = {
-  'deepseek-chat': { in: 0.14, out: 0.28 },
-  'deepseek-coder': { in: 0.14, out: 0.28 },
+  'deepseek-chat': { in: 0.27, out: 1.10 },  // V3.2 - current best
+  'deepseek-coder': { in: 0.14, out: 0.28 }, // Legacy - deprecated
 };
 
 // Load API key
