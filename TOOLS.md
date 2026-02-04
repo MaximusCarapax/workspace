@@ -200,8 +200,9 @@ node tools/gemini.js --no-fallback "prompt"    # direct Gemini only (free but ra
 ## Aider + DeepSeek (PRIMARY CODING TOOL)
 ```bash
 cd /home/node/.openclaw/workspace
-aider --model deepseek/deepseek-chat [files...]
+/home/node/.local/bin/aider --model deepseek/deepseek-chat [files...]
 ```
+**Note:** Use full path — persists across Zeabur restarts.
 - **Cost:** ~$0.14 per million tokens (basically free)
 - **Use for:** All coding tasks — git-aware, multi-file edits
 - **Why:** Proper CLI tool, consistent workflow, auto-commits
