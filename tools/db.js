@@ -209,6 +209,66 @@ function costsAll() {
   console.log('');
 }
 
+function costsAlertStatus() {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const configFile = path.join(process.env.HOME, '.openclaw', 'config', 'cost-alert.json');
+  const stateFile = path.join(process.env.HOME, '.openclaw', 'data', 'cost-alert-state.json');
+  
+  // Load config
+  let config = { threshold_usd: 150, enabled: true };
+  try {
+    if (fs.existsSync(configFile)) {
+      config = { ...config, ...JSON.parse(fs.readFileSync(configFile, 'utf8')) };
+    }
+  } catch (error) {
+    console.error('Error loading config:', error.message);
+  }
+  
+  // Load state
+  let state = {};
+  try {
+    if (fs.existsSync(stateFile)) {
+      state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error loading state:', error.message);
+  }
+  
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const todayState = state[today];
+  
+  // Get today's spending
+  const todayCosts = db.getCostsToday();
+  
+  console.log('\n🚨 Cost Alert Status\n');
+  console.log(`  Current spend today: ${formatCost(todayCosts.total)}`);
+  console.log(`  Alert threshold: ${formatCost(config.threshold_usd)}`);
+  console.log(`  Alerting enabled: ${config.enabled ? 'Yes' : 'No'}\n`);
+  
+  if (todayState && todayState.alerted_at) {
+    console.log(`  Last alert: ${formatDate(todayState.alerted_at)}`);
+    console.log(`  Spend at alert: ${formatCost(todayState.spend_at_alert)}`);
+    console.log(`  Alert threshold: ${formatCost(todayState.threshold_usd)}`);
+  } else {
+    console.log('  No alerts sent today');
+  }
+  
+  // Show recent alerts
+  const recentDays = Object.keys(state).sort().slice(-7);
+  if (recentDays.length > 0) {
+    console.log('\n  Recent alerts:');
+    recentDays.forEach(date => {
+      const dayState = state[date];
+      if (dayState.alerted_at) {
+        console.log(`    ${date}: ${formatCost(dayState.spend_at_alert)} (threshold: ${formatCost(dayState.threshold_usd)})`);
+      }
+    });
+  }
+  console.log('');
+}
+
 // ============================================================
 // ERRORS
 // ============================================================
@@ -468,6 +528,7 @@ COSTS
   costs week                             By model (7 days)
   costs month                            By model (30 days)
   costs all                              All-time total
+  costs alert-status                     Cost alert status and history
 
 ERRORS
   errors                                 Show unresolved errors
@@ -558,6 +619,9 @@ try {
           break;
         case 'all':
           costsAll();
+          break;
+        case 'alert-status':
+          costsAlertStatus();
           break;
         default:
           costsToday();
