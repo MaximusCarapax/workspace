@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-primary-dark text-text-primary;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-primary-medium rounded-lg p-5 border-l-4 border-primary-light;
+  }
+  
+  .btn-primary {
+    @apply bg-accent hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors;
+  }
+  
+  .btn-tab {
+    @apply bg-transparent border-none text-text-muted px-4 py-2 cursor-pointer rounded transition-all;
+  }
+  
+  .btn-tab:hover {
+    @apply text-text-primary bg-primary-light;
+  }
+  
+  .btn-tab.active {
+    @apply text-accent bg-primary-light;
+  }
+}

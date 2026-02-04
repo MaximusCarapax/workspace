@@ -30,6 +30,8 @@ Ideas for night shifts and proactive work. Jason reviews, tests, commits.
 - [x] **Dashboard v2** — Journals viewer + content + insights + stats ✅ (2026-02-03)
 - [ ] **Webhook receiver** — For social notifications
 - [x] **Linear CLI** — Task management from command line ✅ (2026-02-03)
+- [x] **CRM-lite** — Contact management via db.js ✅ (2026-02-04)
+- [x] **Backlog prioritization** — Smart task scoring ✅ (2026-02-04)
 
 ---
 

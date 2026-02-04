@@ -24,6 +24,53 @@ function formatCost(usd) {
 // TASKS
 // ============================================================
 
+function tasksBacklog() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekEnd = new Date(today);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  const tasks = db.db.prepare(`SELECT * FROM tasks WHERE status IN ('todo', 'in_progress')`).all();
+  
+  if (tasks.length === 0) {
+    console.log('No active tasks.');
+    return;
+  }
+
+  const scoredTasks = tasks.map(task => {
+    let score = 0;
+    const priorityPoints = {1: 40, 2: 30, 3: 20, 4: 10};
+    score += priorityPoints[task.priority] || 0;
+
+    if (task.due_date) {
+      const due = new Date(task.due_date);
+      const dueDate = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+      if (dueDate < today) score += 50;
+      else if (dueDate.getTime() === today.getTime()) score += 40;
+      else if (dueDate <= weekEnd) score += 20;
+    }
+
+    const created = new Date(task.created_at);
+    const ageDays = (now - created) / (1000 * 60 * 60 * 24);
+    if (ageDays > 14) score += 20;
+    else if (ageDays > 7) score += 10;
+
+    return { ...task, score };
+  });
+
+  scoredTasks.sort((a, b) => b.score - a.score);
+  const priorityEmojis = {1: '🔴', 2: '🟠', 3: '🟡', 4: '⚪'};
+
+  console.log('\n🎯 Prioritized Backlog\n');
+  scoredTasks.slice(0, 10).forEach((task, index) => {
+    const dueStr = task.due_date ? new Date(task.due_date).toLocaleDateString() : '-';
+    console.log(`  ${index + 1}. [${task.score}pts] ${priorityEmojis[task.priority] || '⚪'} ${task.title}`);
+    if (task.due_date) console.log(`      Due: ${dueStr}`);
+  });
+  console.log('');
+  return scoredTasks;
+}
+
 function tasksList(options = {}) {
   const tasks = db.getTasks(options);
   if (tasks.length === 0) {
@@ -288,6 +335,116 @@ function memoryList(category) {
 }
 
 // ============================================================
+// CONTACTS
+// ============================================================
+
+function contactsList() {
+  const rows = db.db.prepare(`
+    SELECT id, name, company, last_contact, follow_up_date 
+    FROM contacts 
+    ORDER BY name COLLATE NOCASE
+  `).all();
+  
+  if (rows.length === 0) {
+    console.log('No contacts yet. Add one with: contacts add "Name"');
+    return rows;
+  }
+  
+  console.log('\n📇 Contacts\n');
+  for (const c of rows) {
+    const last = c.last_contact ? new Date(c.last_contact).toLocaleDateString() : 'Never';
+    const follow = c.follow_up_date ? new Date(c.follow_up_date).toLocaleDateString() : '-';
+    console.log(`  [${c.id}] ${c.name} | ${c.company || '-'} | Last: ${last} | Follow-up: ${follow}`);
+  }
+  console.log('');
+  return rows;
+}
+
+function contactsAdd(name, opts = {}) {
+  const sql = `INSERT INTO contacts (name, email, phone, company, role, tags, source) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  const info = db.db.prepare(sql).run(
+    name,
+    opts.email || null,
+    opts.phone || null,
+    opts.company || null,
+    opts.role || null,
+    opts.tags || null,
+    opts.source || null
+  );
+  console.log(`✅ Added contact: ${name} (ID: ${info.lastInsertRowid})`);
+  return { id: info.lastInsertRowid, name };
+}
+
+function contactsUpdate(id, opts = {}) {
+  const allowedFields = ['name', 'email', 'phone', 'company', 'role', 'notes', 'tags', 'last_contact', 'follow_up_date', 'source'];
+  const updates = [];
+  const values = [];
+  
+  for (const [key, val] of Object.entries(opts)) {
+    if (allowedFields.includes(key) && val !== undefined) {
+      updates.push(`${key} = ?`);
+      values.push(val);
+    }
+  }
+  
+  if (updates.length === 0) {
+    console.log('⚠️ No valid fields to update');
+    return null;
+  }
+  
+  updates.push("updated_at = datetime('now')");
+  values.push(id);
+  
+  const sql = `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`;
+  const result = db.db.prepare(sql).run(...values);
+  
+  if (result.changes > 0) {
+    console.log(`✅ Updated contact ID: ${id}`);
+    return { id, updated: true };
+  } else {
+    console.log(`❌ Contact ID ${id} not found`);
+    return { id, updated: false };
+  }
+}
+
+function contactsSearch(query) {
+  const sql = `SELECT id, name, company, email, tags FROM contacts WHERE name LIKE ? OR company LIKE ? OR tags LIKE ? ORDER BY name COLLATE NOCASE`;
+  const searchTerm = `%${query}%`;
+  const rows = db.db.prepare(sql).all(searchTerm, searchTerm, searchTerm);
+  
+  if (rows.length === 0) {
+    console.log(`No contacts matching "${query}"`);
+    return rows;
+  }
+  
+  console.log(`\n🔍 Search: "${query}"\n`);
+  for (const c of rows) {
+    console.log(`  [${c.id}] ${c.name} | ${c.company || '-'} | ${c.email || '-'} | ${c.tags || '-'}`);
+  }
+  console.log('');
+  return rows;
+}
+
+function contactsFollowup() {
+  const sql = `SELECT id, name, company, follow_up_date, last_contact FROM contacts WHERE follow_up_date IS NOT NULL AND date(follow_up_date) <= date('now') ORDER BY date(follow_up_date) ASC`;
+  const rows = db.db.prepare(sql).all();
+  
+  if (rows.length === 0) {
+    console.log('No follow-ups due.');
+    return rows;
+  }
+  
+  console.log('\n🔔 Follow-ups Due\n');
+  for (const c of rows) {
+    const follow = new Date(c.follow_up_date).toLocaleDateString();
+    const last = c.last_contact ? new Date(c.last_contact).toLocaleDateString() : 'Never';
+    console.log(`  [${c.id}] ${c.name} | ${c.company || '-'} | Due: ${follow} | Last: ${last}`);
+  }
+  console.log('');
+  return rows;
+}
+
+// ============================================================
 // HELP
 // ============================================================
 
@@ -299,6 +456,7 @@ Usage: node tools/db.js <command> [subcommand] [args]
 
 TASKS
   tasks list [--status todo|done|all]    List tasks
+  tasks backlog                          Smart prioritized view
   tasks add "Title" [--priority 1-4]     Add task
   tasks done <id>                        Complete task
   tasks update <id> --status <status>    Update task
@@ -325,6 +483,13 @@ MEMORY
   memory add "content" --category fact   Add memory
   memory search "query"                  Search memory
   memory list <category>                 List by category
+
+CONTACTS
+  contacts list                          List all contacts
+  contacts add "Name" [--email --phone --company --role --tags --source]
+  contacts update <id> [--field value]   Update contact fields
+  contacts search "query"                Search by name/company/tags
+  contacts followup                      Show due follow-ups
 
 Categories: fact, preference, lesson, todo, person, project, other
 `);
@@ -355,6 +520,9 @@ try {
       switch (subcommand) {
         case 'list':
           tasksList({ status: flags.status === 'all' ? null : flags.status });
+          break;
+        case 'backlog':
+          tasksBacklog();
           break;
         case 'add':
           tasksAdd(args[2], { priority: flags.priority ? parseInt(flags.priority) : undefined });
@@ -429,6 +597,28 @@ try {
           break;
         default:
           showHelp();
+      }
+      break;
+    
+    case 'contacts':
+      switch (subcommand) {
+        case 'list':
+          contactsList();
+          break;
+        case 'add':
+          contactsAdd(args[2], flags);
+          break;
+        case 'update':
+          contactsUpdate(parseInt(args[2]), flags);
+          break;
+        case 'search':
+          contactsSearch(args[2]);
+          break;
+        case 'followup':
+          contactsFollowup();
+          break;
+        default:
+          contactsList();
       }
       break;
       

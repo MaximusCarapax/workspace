@@ -24,7 +24,7 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 ### Model Routing (Updated 2026-02-04)
 | Task | Model | Cost | Command |
 |------|-------|------|---------|
-| **Coding** | DeepSeek | ~$0.14/M in, $0.28/M out | `node tools/deepseek.js` or aider |
+| **Coding** | DeepSeek Coder | ~$0.14/M in, $0.28/M out | `aider --model deepseek/deepseek-coder` |
 | **Non-code** | Gemini (OpenRouter) | ~$0.10/M in, $0.40/M out | `node tools/gemini.js` |
 | **Planning/judgment** | Opus (me) | $$$ | Direct |
 

@@ -241,7 +241,7 @@ async function fetchViaBraveSearch(subreddits) {
   
   try {
     const response = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=20&freshness=pd`,
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=20&freshness=pw`,
       {
         headers: {
           'X-Subscription-Token': process.env.BRAVE_API_KEY,

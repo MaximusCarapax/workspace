@@ -1,5 +1,70 @@
 [
   {
+    "timestamp": "2026-02-04T12:01:35.281Z",
+    "postCount": 8,
+    "topPosts": [
+      {
+        "subreddit": "MachineLearning",
+        "title": "r/MachineLearning on Reddit: [D] MSR Cambridge vs Amazon Applied Science internship, thoughts?",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/MachineLearning/comments/1qtgzbv/d_msr_cambridge_vs_amazon_applied_science/",
+        "created": null,
+        "flair": null,
+        "selftext": "Beginners -&gt; /r/mlquestions or /r/learnmachinelearning , AGI -&gt; /r/singularity, career advices -&gt; /r/cscareerquestions, datasets -&gt; r/datasets"
+      },
+      {
+        "subreddit": "singularity",
+        "title": "r/singularity on Reddit: All Major LLM Releases from 2025 - Today (Source:Lex Fridman State of Ai in 2026 Video)",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/singularity/comments/1qu33gu/all_major_llm_releases_from_2025_today_sourcelex/",
+        "created": null,
+        "flair": null,
+        "selftext": "<strong>Everything pertaining to the technological singularity and related topics, e.g. AI, human enhancement, etc. ... A subreddit dedicated to everything Artificial Intelligence</strong>. Covering topics from AGI to AI startups."
+      },
+      {
+        "subreddit": "MachineLearning",
+        "title": "r/MachineLearning on Reddit: [R] Knowledge Graphs are Implicit Reward Models: Path-Derived Signals Enable Compositional Reasoning --- Our paper on using Knowledge Graphs as a scalable reward model to enable compositional reasoning",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/MachineLearning/comments/1qq4sn4/r_knowledge_graphs_are_implicit_reward_models/",
+        "created": null,
+        "flair": null,
+        "selftext": "Beginners -&gt; /r/mlquestions or /r/learnmachinelearning , AGI -&gt; /r/singularity, career advices -&gt; /r/cscareerquestions, datasets -&gt; r/datasets"
+      },
+      {
+        "subreddit": "MachineLearning",
+        "title": "r/MachineLearning on Reddit: [D] aaai 2026 awards feel like a shift. less benchmark chasing, more real world stuff",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/MachineLearning/comments/1qp2yay/d_aaai_2026_awards_feel_like_a_shift_less/",
+        "created": null,
+        "flair": null,
+        "selftext": "Artificial general intelligence is also referred to as &quot;strong AI&quot;, &quot;full AI&quot; or as the ability of a machine to perform &quot;general intelligent action&quot;. /r/neuralnetworks /r/artificial /r/machinelearning /r/OpenCog /r/causality ... Beginners -&gt; /r/mlquestions or /r/learnmachinelearning , AGI -&gt; /r/singularity, career advices -&gt; /r/cscareerquestions, datasets -&gt; r/datasets"
+      },
+      {
+        "subreddit": "MachineLearning",
+        "title": "r/MachineLearning on Reddit: [D] Training Image Generation Models with RL",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/MachineLearning/comments/1qr56dv/d_training_image_generation_models_with_rl/",
+        "created": null,
+        "flair": null,
+        "selftext": "Beginners -&gt; /r/mlquestions or /r/learnmachinelearning , AGI -&gt; /r/singularity, career advices -&gt; /r/cscareerquestions, datasets -&gt; r/datasets"
+      }
+    ],
+    "analysis": "Here's an analysis of the Reddit posts:\n\n*   **Top 3 Themes**\n    *   **Practicalities of AI Development & MLOps**: Discussions around internships, tracking data transformations, scaling RL post-training, and a perceived shift towards \"real-world stuff\" in research.\n    *   **Advanced AI Research & Techniques (with a focus on RL)**: Exploration of novel methods like using Knowledge Graphs as reward models, applying RL to image generation, and general RL frameworks.\n    *   **Industry Direction, User Experience & Feedback**: Posts about future LLM releases, the evolving focus of major conferences, and user dissatisfaction with major AI model providers like OpenAI.\n\n*   **Sentiment**\n    *   **Mixed**: Predominantly inquisitive and research-oriented, with a positive outlook on practical applications, but also a notable undercurrent of frustration and concern regarding user experience with commercial AI models.\n\n*   **Hot Takes**\n    *   **Shift from \"benchmark chasing\" to \"real-world stuff\" in AI research**: The AAAI awards post suggests a significant, positive re-orientation in academic focus.\n    *   **User dissatisfaction with OpenAI models requires direct, public social media action**: The OpenAI post advocates for a more aggressive, public feedback strategy beyond internal forums.\n\n*   **Emerging Trends**\n    *   **Knowledge Graphs as scalable reward models**: A specific research direction for enabling compositional reasoning.\n    *   **Increased focus on MLOps and Data Provenance**: Highlighted by discussions on tracking data transformations and scaling RL post-training.\n    *   **Expanding applications of Reinforcement Learning**: Seen in its use for training image generation models.\n\n*   **One-liner Summary**\n    The AI/tech community is actively discussing practical MLOps challenges, advanced RL applications, and shifts in research focus towards real-world impact, while also expressing frustration with major AI model providers.",
+    "subreddits": [
+      "artificial",
+      "openai",
+      "LocalLLaMA",
+      "singularity",
+      "ChatGPT",
+      "MachineLearning"
+    ]
+  },
+  {
     "timestamp": "2026-02-03T20:05:23.154Z",
     "postCount": 2,
     "topPosts": [
