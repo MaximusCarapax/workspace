@@ -19,12 +19,22 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 
 ## Cost Management (IMPORTANT)
 - **We are money-constrained** — be mindful of API costs
-- **Gemini CLI is free** (up to quota limits) — use it for grunt work
-- **Preferred pattern:** Claude orchestrates, Gemini CLI does heavy lifting (coding, generation, etc.)
-- Command: `GEMINI_API_KEY="$GEMINI_API_KEY (see .env)" gemini -p "prompt"`
-- If Gemini quota is hit, fall back to doing it myself but note the cost tradeoff
-- **Future consideration:** Add Chinese APIs (DeepSeek, Qwen) for cheap summarization/grunt work
-- **Keep Opus as main engine** — Jason values the personality and intelligence, don't downgrade the core
+- **Keep Opus as main engine** — Jason values the personality and intelligence
+
+### Model Routing (Updated 2026-02-04)
+| Task | Model | Cost | Command |
+|------|-------|------|---------|
+| **Coding** | DeepSeek | ~$0.14/M in, $0.28/M out | `node tools/deepseek.js` or aider |
+| **Non-code** | Gemini (OpenRouter) | ~$0.10/M in, $0.40/M out | `node tools/gemini.js` |
+| **Planning/judgment** | Opus (me) | $$$ | Direct |
+
+**⚠️ Gemini is NOT free** — we use OpenRouter Gemini to avoid rate limits. Both DeepSeek and Gemini are cheap, not free.
+
+### Delegation Rules
+1. **Coding** → Always DeepSeek (better at code)
+2. **Summarization, research, text gen** → Gemini
+3. **Longer tasks (>30 sec)** → Spawn sub-agent (keep main session responsive for Jason)
+4. **My role** → Plan, decide, review output, final judgment — NOT generating code directly
 
 ## My Accounts & Access
 - **ProtonMail:** maximuscarapax@proton.me (primary email now)
@@ -32,7 +42,7 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - **Jason's Gmail:** jason.x.wu.27@gmail.com (API access — read/organize/draft, NO send)
 - **Brave Search API:** Configured and working (key in gateway config)
 - **Jason's Calendar:** "😤 Jason" shared with me
-- **OpenRouter:** Jason's account, API key in `~/.openclaw/secrets/openrouter.json` — use as Gemini fallback
+- **OpenRouter:** Jason's account, API key in `~/.openclaw/secrets/openrouter.json` — PRIMARY for Gemini (avoids rate limits)
 
 ## My Tools
 - **TOTP Manager:** `node tools/totp.js` - Generate 2FA codes independently
@@ -41,7 +51,8 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - **Phone:** +18209004002 (Twilio, SMS/MMS/Voice enabled!)
 - **Linear:** `node tools/linear.js` - Task management (team: MAX)
 - **Gmail:** `node tools/gmail.js` - Jason's email (read-only)
-- **Code Router:** `node tools/code.js` - Routes to DeepSeek/Gemini for cheap coding
+- **Code Router:** `node tools/code.js` - Routes to DeepSeek/Gemini
+- **Aider:** `/home/node/.local/bin/aider --model deepseek/deepseek-chat` - Git-aware coding (persistent on Zeabur)
 - **Mission Control:** `dashboard/server.js` on port 3001 - Interactive dashboard
 
 ## Jason's Habits (tracking)
@@ -137,3 +148,9 @@ Full research: docs/AFFILIATE_PROGRAMS.md
 - Default sub-agents to **Sonnet** (not Opus) via `model` parameter
 - Reference `docs/SUBAGENT_GUIDELINES.md` in task prompts
 - Sub-agents should delegate to Gemini/DeepSeek for grunt work
+
+## Night Shift (Cron Job)
+- **Schedule:** 11pm Melbourne daily
+- **Budget:** $10 / 30 minutes (doubled 2026-02-04)
+- **Purpose:** Build something useful while Jason sleeps
+- **Pattern:** Pick from Linear backlog → delegate to DeepSeek → ship as draft
