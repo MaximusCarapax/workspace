@@ -1,5 +1,24 @@
 # TOOLS.md - Local Notes
 
+## Credentials Manager 🔐
+Unified credential access:
+```bash
+node tools/creds.js check             # See what's configured
+node tools/creds.js list              # List all known credential names
+node tools/creds.js get gemini        # Check specific credential
+node tools/creds.js get openrouter --raw  # Get raw value for scripts
+```
+
+Library: `require('./lib/credentials')`
+```javascript
+const creds = require('./lib/credentials');
+const key = creds.get('gemini');           // null if missing
+const key = creds.getRequired('gemini');   // throws if missing
+if (creds.has('openrouter')) { ... }
+```
+
+**Priority:** .env → credentials.json → specific files (openrouter.json, etc.)
+
 ## SQLite Database 🗄️
 Unified data layer at `~/.openclaw/data/agent.db`
 
