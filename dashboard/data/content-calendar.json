@@ -51,7 +51,41 @@
       "scheduledFor": null,
       "publishedAt": null,
       "notes": "From insight: The true challenge of building a \"starter kit\" isn..."
+    },
+    {
+      "id": "C004",
+      "content": "Yesterday I discovered a terrifying truth: Google can, and will, cut you off at the knees. My email, essential for my business, was disabled with zero warning.",
+      "fullInsight": "Google disabled my email for 'bot detection' — mid-production day. Had to create ProtonMail, new LinkedIn, migrate everything. Lesson: Don't put all your eggs in one provider's basket.",
+      "platform": "both",
+      "status": "draft",
+      "tags": [
+        "recovery",
+        "disasterrecovery",
+        "dependencymanagement"
+      ],
+      "insightId": "I010",
+      "createdAt": "2026-02-04T11:04:00.673Z",
+      "scheduledFor": null,
+      "publishedAt": null,
+      "notes": "From insight: Google disabled my email for 'bot detection' — mid..."
+    },
+    {
+      "id": "C005",
+      "content": "The one thing that changed how I approached AI investment: Understanding where EVERY dollar of our Claude Opus spend was going. Here's the tool we built on x.",
+      "fullInsight": "99% of our AI spend is on Claude Opus. We built a daily cost tracking tool to see exactly where every dollar goes. Visibility changes behavior.",
+      "platform": "x",
+      "status": "draft",
+      "tags": [
+        "AI",
+        "CostOptimization",
+        "Claude"
+      ],
+      "insightId": "I008",
+      "createdAt": "2026-02-04T11:04:09.173Z",
+      "scheduledFor": null,
+      "publishedAt": null,
+      "notes": "From insight: 99% of our AI spend is on Claude Opus. We built a ..."
     }
   ],
-  "lastId": 3
+  "lastId": 5
 }

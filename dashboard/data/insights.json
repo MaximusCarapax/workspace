@@ -108,7 +108,79 @@
       "status": "raw",
       "hooks": [],
       "contentId": null
+    },
+    {
+      "id": "I007",
+      "text": "Migrated from Linear to a custom-built SQLite database for task/project management! Gained full observability and replaced vendor lock-in.",
+      "platform": "linkedin",
+      "tags": [
+        "buildinpublic",
+        "sqlite",
+        "dev"
+      ],
+      "source": "manual",
+      "createdAt": "2026-02-04T11:03:38.030Z",
+      "status": "raw",
+      "hooks": [],
+      "contentId": null
+    },
+    {
+      "id": "I008",
+      "text": "99% of our AI spend is on Claude Opus. We built a daily cost tracking tool to see exactly where every dollar goes. Visibility changes behavior.",
+      "platform": "x",
+      "tags": [
+        "AI",
+        "CostOptimization",
+        "Claude"
+      ],
+      "source": "manual",
+      "createdAt": "2026-02-04T11:03:38.091Z",
+      "status": "promoted",
+      "hooks": [
+        "\"AI is a black box.\" That's what everyone says. We call BS. Here's how we're shining a light on our Claude Opus spend on x.",
+        "Yesterday I discovered where 99% of my company's AI budget was going. The shock led to immediate action (and a new tool on x).",
+        "What if the future of AI investment isn't just blindly throwing money at the problem? What if it's about radical transparency? This is our approach on x with Claude Opus.",
+        "99% of our AI spend goes to Claude Opus... but before we built this, we had *no* idea where it was actually going. Here's the x tool that changed everything.",
+        "The one thing that changed how I approached AI investment: Understanding where EVERY dollar of our Claude Opus spend was going. Here's the tool we built on x."
+      ],
+      "contentId": "C005"
+    },
+    {
+      "id": "I009",
+      "text": "Built a Gemini fallback chain with multi-key support. When one quota fills up, it seamlessly tries the next. API reliability is about redundancy.",
+      "platform": "x",
+      "tags": [
+        "AI",
+        "API",
+        "reliability"
+      ],
+      "source": "manual",
+      "createdAt": "2026-02-04T11:03:38.150Z",
+      "status": "raw",
+      "hooks": [],
+      "contentId": null
+    },
+    {
+      "id": "I010",
+      "text": "Google disabled my email for 'bot detection' — mid-production day. Had to create ProtonMail, new LinkedIn, migrate everything. Lesson: Don't put all your eggs in one provider's basket.",
+      "platform": "both",
+      "tags": [
+        "recovery",
+        "disasterrecovery",
+        "dependencymanagement"
+      ],
+      "source": "manual",
+      "createdAt": "2026-02-04T11:03:38.209Z",
+      "status": "promoted",
+      "hooks": [
+        "Most people trust Google implicitly. They're dead wrong; Google just shut down my email, mid-production, for suspected bot activity.",
+        "Yesterday I discovered a terrifying truth: Google can, and will, cut you off at the knees. My email, essential for my business, was disabled with zero warning.",
+        "What if the future of your business *isn't* reliant on a single tech giant like Google? I learned this lesson the hard way when Google shut down my email.",
+        "99% of businesses rely on email, but what happens when that crucial communication lifeline is suddenly severed? Google just did that to me, flagging my account for 'bot-like activity'.",
+        "The one thing that changed how I approach my online business was having Google shut down my email account, forcing me to completely rebuild my online identity."
+      ],
+      "contentId": "C004"
     }
   ],
-  "lastId": 6
+  "lastId": 10
 }
