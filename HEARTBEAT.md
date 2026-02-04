@@ -115,7 +115,29 @@ node tools/db.js activity summary "Tasks: 2 stale (>3 days), 1 blocked"
 
 ---
 
-## 7. Catch-Up Check (If time)
+## 7. Friction Pattern Check (Always)
+Read `memory/friction.md` and check for patterns.
+
+**Thresholds:**
+- 3+ friction entries today → surface patterns NOW
+- Same issue 2+ times in 3 days → flag immediately
+
+**If threshold hit:**
+1. Summarize the pattern
+2. Propose a fix
+3. Message Jason with: "🔧 Friction pattern spotted: [issue]. Suggested fix: [fix]. Want me to address it?"
+
+**If no threshold hit:**
+- Log check to activity
+- Continue silently
+
+**Don't escalate for:**
+- One-off issues (that's what weekly retro catches)
+- Already-fixed issues
+
+---
+
+## 8. Catch-Up Check (If time)
 ```bash
 node tools/db.js activity --category cron --since "2 hours ago" --limit 5
 ```
@@ -127,7 +149,7 @@ Check if any cron jobs failed or were missed. If something important failed:
 
 ---
 
-## 8. Escalation Rules
+## 9. Escalation Rules
 
 **DO ping Jason if:**
 - 🔴 Critical system down (API keys revoked, database corrupted)
@@ -143,7 +165,7 @@ Check if any cron jobs failed or were missed. If something important failed:
 
 ---
 
-## 9. Response Format
+## 10. Response Format
 
 **If everything OK:**
 ```
