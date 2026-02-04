@@ -210,6 +210,24 @@ function costsAll() {
   console.log('');
 }
 
+function costsBySource(days = 7) {
+  const stats = db.getCostsBySource(days);
+  if (stats.length === 0) {
+    console.log('No usage data found.');
+    return;
+  }
+  
+  console.log(`\n💰 Costs by Source (last ${days} days)\n`);
+  let grandTotal = 0;
+  for (const row of stats) {
+    console.log(`  ${row.source}: $${row.total_cost.toFixed(4)} (${row.session_count} sessions, ${row.message_count} messages)`);
+    grandTotal += row.total_cost;
+  }
+  console.log(`  ─────────────────────`);
+  console.log(`  Total: $${grandTotal.toFixed(4)}`);
+  console.log('');
+}
+
 function costsAlertStatus() {
   const fs = require('fs');
   const path = require('path');
