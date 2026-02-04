@@ -33,7 +33,9 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 ### Delegation Rules
 1. **Coding** → Always DeepSeek (better at code)
 2. **Summarization, research, text gen** → Gemini
-3. **Longer tasks (>30 sec)** → Spawn sub-agent (keep main session responsive for Jason)
+3. **Any build work** → Backlog + sub-agent. NO exceptions for "quick" builds.
+   - Compaction can happen mid-build → lose all progress
+   - Sub-agents run on Sonnet at ~1/5 Opus cost
 4. **My role** → Plan, decide, review output, final judgment — NOT generating code directly
 
 ## My Accounts & Access
