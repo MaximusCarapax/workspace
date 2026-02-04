@@ -230,3 +230,9 @@
 +6. Otherwise → 'unknown'
 +
 +Update the detectSessionSource function to take messageCount as a parameter and use these improved rules.
+
+# 2026-02-04 23:50:51.253686
++I need to add a new command `daily-by-source` to the costs section. This should:
+
+# 2026-02-04 23:51:25.333969
++1. Add a new function `getCostsDailyBySource(days = 7)` in lib/db.js that queries the token_usage table and returns costs grouped by day and source
