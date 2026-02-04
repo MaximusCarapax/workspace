@@ -154,3 +154,11 @@ Full research: docs/AFFILIATE_PROGRAMS.md
 - **Budget:** $10 / 30 minutes (doubled 2026-02-04)
 - **Purpose:** Build something useful while Jason sleeps
 - **Pattern:** Pick from Linear backlog → delegate to DeepSeek → ship as draft
+
+## Tech Stack Preferences (2026-02-04)
+For new builds, prefer modern over simple:
+- **Frontend:** Vite + React (or SvelteKit for simpler projects)
+- **Styling:** Tailwind CSS
+- **Backend:** Express.js or Hono (lightweight)
+- **Avoid:** Plain HTML/CSS/JS, inline styles, no-framework approaches
+- **Why:** Better DX, component reuse, easier to maintain
