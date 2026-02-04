@@ -25,6 +25,24 @@ function saveState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
+function detectSessionSource(firstUserMessage) {
+  if (!firstUserMessage) return 'main';
+  
+  const message = firstUserMessage;
+  
+  if (message.includes('HEARTBEAT.md')) {
+    return 'heartbeat';
+  }
+  if (message.includes('Night Shift')) {
+    return 'cron:night-shift';
+  }
+  if (message.includes('Morning Briefing') || message.includes('morning briefing')) {
+    return 'cron:morning-briefing';
+  }
+  
+  return 'main';
+}
+
 function determineSource(firstUserMessage) {
   if (!firstUserMessage) return 'main';
   
@@ -82,7 +100,7 @@ async function processSessionFile(filePath, state) {
   }
 
   // Determine source based on first user message
-  source = determineSource(firstUserMessage);
+  source = detectSessionSource(firstUserMessage);
   
   // Reopen the file for processing
   const fileStream2 = fs.createReadStream(filePath);
@@ -190,8 +208,14 @@ async function main() {
 
   console.log(`\n✅ Synced ${totalMessages} new messages, $${totalCost.toFixed(4)} total`);
   
-  // Show costs grouped by source
-  console.log(`\n📊 Today's Costs by Source:`);
+  // Print summary grouped by source
+  console.log(`\n📊 Summary by source:`);
+  for (const [source, stats] of Object.entries(sourceStats)) {
+    console.log(`  ${source}: ${stats.messages} messages, $${stats.cost.toFixed(4)} total cost`);
+  }
+  
+  // Show costs grouped by source from database
+  console.log(`\n📊 Today's Costs by Source (from database):`);
   const todaySources = db.getCostsBySource(1);
   for (const row of todaySources) {
     console.log(`  ${row.source}: $${row.total_cost.toFixed(4)} (${row.session_count} sessions, ${row.message_count} messages)`);
