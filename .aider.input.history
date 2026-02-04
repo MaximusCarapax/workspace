@@ -104,3 +104,129 @@
 +   - metadata: { input_tokens: number, output_tokens: number, cost_usd: number }
 +
 +Just add the reporting command - the logging will be done by the heartbeat process itself.
+
+# 2026-02-04 23:38:18.854459
++Enhance tools/sync-claude-costs.js to categorize sessions by source:
++
++1. For each session file, read the first user message to determine source:
++   - If contains 'HEARTBEAT.md' or 'heartbeat poll' → source: 'heartbeat'
++   - If contains 'Night Shift' or '11pm build' → source: 'cron:night-shift'
++   - If contains 'Morning Briefing' or 'morning briefing' → source: 'cron:morning-briefing'
++   - If contains 'Weekly Review' → source: 'cron:weekly-review'
++   - If contains 'LinkedIn' and 'post' → source: 'cron:linkedin-post'
++   - If contains 'X post' or 'tweet' and looks like cron → source: 'cron:x-post'
++   - Otherwise → source: 'main'
++
++2. Store source attribution in the database. Add a 'source' column to usage_records if needed, or create a new table session_costs:
++   - session_id TEXT PRIMARY KEY
++   - source TEXT (heartbeat, cron:name, main, unknown)
++   - total_cost REAL
++   - input_tokens INTEGER
++   - output_tokens INTEGER  
++   - message_count INTEGER
++   - first_timestamp TEXT
++   - last_timestamp TEXT
++
++3. Add reporting: at the end of sync, show costs grouped by source:
++   Today by Source:
++     main: $X.XX (N sessions)
++     heartbeat: $X.XX (N sessions)
++     cron:night-shift: $X.XX (N sessions)
++     ...
++
++4. Also add a new command to tools/db.js: 'costs by-source [--days 7]' that shows costs grouped by source for the time period.
++
++Keep backward compatibility - existing sync should still work.
+
+# 2026-02-04 23:38:18.854680
++Enhance tools/sync-claude-costs.js to categorize sessions by source:
++
++1. For each session file, read the first user message to determine source:
++   - If contains 'HEARTBEAT.md' or 'heartbeat poll' → source: 'heartbeat'
++   - If contains 'Night Shift' or '11pm build' → source: 'cron:night-shift'
++   - If contains 'Morning Briefing' or 'morning briefing' → source: 'cron:morning-briefing'
++   - If contains 'Weekly Review' → source: 'cron:weekly-review'
++   - If contains 'LinkedIn' and 'post' → source: 'cron:linkedin-post'
++   - If contains 'X post' or 'tweet' and looks like cron → source: 'cron:x-post'
++   - Otherwise → source: 'main'
++
++2. Store source attribution in the database. Add a 'source' column to usage_records if needed, or create a new table session_costs:
++   - session_id TEXT PRIMARY KEY
++   - source TEXT (heartbeat, cron:name, main, unknown)
++   - total_cost REAL
++   - input_tokens INTEGER
++   - output_tokens INTEGER  
++   - message_count INTEGER
++   - first_timestamp TEXT
++   - last_timestamp TEXT
++
++3. Add reporting: at the end of sync, show costs grouped by source:
++   Today by Source:
++     main: $X.XX (N sessions)
++     heartbeat: $X.XX (N sessions)
++     cron:night-shift: $X.XX (N sessions)
++     ...
++
++4. Also add a new command to tools/db.js: 'costs by-source [--days 7]' that shows costs grouped by source for the time period.
++
++Keep backward compatibility - existing sync should still work.
+
+# 2026-02-04 23:41:29.621505
++Add source detection to tools/sync-claude-costs.js:
++
++1. Add function detectSessionSource(firstUserMessage) that returns:
++   - 'heartbeat' if message contains 'HEARTBEAT.md' 
++   - 'cron:night-shift' if contains 'Night Shift'
++   - 'cron:morning-briefing' if contains 'Morning Briefing' or 'morning briefing'
++   - 'main' otherwise
++
++2. In processSessionFile, find the first user message and call detectSessionSource
++
++3. At the end, print a summary grouped by source showing count and total cost per source
++
++Keep it simple - no database changes yet.
+
+# 2026-02-04 23:41:29.622802
++Add source detection to tools/sync-claude-costs.js:
++
++1. Add function detectSessionSource(firstUserMessage) that returns:
++   - 'heartbeat' if message contains 'HEARTBEAT.md' 
++   - 'cron:night-shift' if contains 'Night Shift'
++   - 'cron:morning-briefing' if contains 'Morning Briefing' or 'morning briefing'
++   - 'main' otherwise
++
++2. In processSessionFile, find the first user message and call detectSessionSource
++
++3. At the end, print a summary grouped by source showing count and total cost per source
++
++Keep it simple - no database changes yet.
+
+# 2026-02-04 23:43:20.494422
++Fix the source detection in tools/sync-claude-costs.js:
++
++The current logic misclassifies the main session as 'heartbeat' because system messages mention HEARTBEAT.md.
++
++Better detection rules:
++1. If first user message starts with '[Telegram' or contains 'id:5071818415' → 'main' (Jason's Telegram)
++2. If first user message is EXACTLY the heartbeat prompt or starts with 'Read HEARTBEAT.md' → 'heartbeat'  
++3. If contains 'Night Shift' AND session has < 100 messages → 'cron:night-shift'
++4. If contains 'Morning Briefing' AND session has < 50 messages → 'cron:morning-briefing'
++5. If session has > 500 messages → probably 'main' (long-running session)
++6. Otherwise → 'unknown'
++
++Update the detectSessionSource function to take messageCount as a parameter and use these improved rules.
+
+# 2026-02-04 23:43:20.495128
++Fix the source detection in tools/sync-claude-costs.js:
++
++The current logic misclassifies the main session as 'heartbeat' because system messages mention HEARTBEAT.md.
++
++Better detection rules:
++1. If first user message starts with '[Telegram' or contains 'id:5071818415' → 'main' (Jason's Telegram)
++2. If first user message is EXACTLY the heartbeat prompt or starts with 'Read HEARTBEAT.md' → 'heartbeat'  
++3. If contains 'Night Shift' AND session has < 100 messages → 'cron:night-shift'
++4. If contains 'Morning Briefing' AND session has < 50 messages → 'cron:morning-briefing'
++5. If session has > 500 messages → probably 'main' (long-running session)
++6. Otherwise → 'unknown'
++
++Update the detectSessionSource function to take messageCount as a parameter and use these improved rules.
