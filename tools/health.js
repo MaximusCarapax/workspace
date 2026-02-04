@@ -117,19 +117,6 @@ const checks = {
     }
   },
 
-  async twilio() {
-    try {
-      const credsPath = path.join(process.env.HOME, '.openclaw/secrets/credentials.json');
-      const creds = JSON.parse(fs.readFileSync(credsPath));
-      if (!creds.twilio?.accountSid) {
-        return { status: 'error', message: 'No Twilio credentials' };
-      }
-      return { status: 'ok', message: `Phone: ${creds.twilio.phoneNumber || 'configured'}` };
-    } catch (e) {
-      return { status: 'error', message: e.message };
-    }
-  },
-
   async twitter() {
     try {
       // Check for Bird CLI cookies in .env (primary method)
@@ -196,6 +183,80 @@ const checks = {
       return { status: 'ok', message: `${count.c} usage records` };
     } catch (e) {
       return { status: 'error', message: e.message };
+    }
+  },
+
+  async cron() {
+    try {
+      // Check cron jobs via gateway API
+      const { execSync } = require('child_process');
+      const result = execSync('openclaw cron list --json 2>/dev/null', { encoding: 'utf8', timeout: 5000 });
+      const data = JSON.parse(result);
+      const jobs = data.jobs || [];
+      
+      if (jobs.length === 0) {
+        return { status: 'degraded', message: 'No cron jobs configured' };
+      }
+      
+      const enabled = jobs.filter(j => j.enabled).length;
+      const now = Date.now();
+      
+      // Check if any jobs are overdue (last run > 2x expected interval)
+      let overdue = 0;
+      for (const job of jobs) {
+        if (!job.enabled || !job.state?.lastRunAtMs) continue;
+        const lastRun = job.state.lastRunAtMs;
+        const hoursSince = (now - lastRun) / 1000 / 60 / 60;
+        // If job hasn't run in 25+ hours, it's probably overdue
+        if (hoursSince > 25) overdue++;
+      }
+      
+      if (overdue > 0) {
+        return { status: 'degraded', message: `${enabled} jobs, ${overdue} overdue` };
+      }
+      
+      return { status: 'ok', message: `${enabled} jobs active` };
+    } catch (e) {
+      // Fallback: just check if openclaw is running
+      try {
+        const { execSync } = require('child_process');
+        execSync('pgrep -f openclaw', { encoding: 'utf8' });
+        return { status: 'ok', message: 'Gateway running' };
+      } catch {
+        return { status: 'error', message: 'Cannot check cron status' };
+      }
+    }
+  },
+
+  async git() {
+    try {
+      const { execSync } = require('child_process');
+      const workDir = path.join(process.env.HOME, '.openclaw/workspace');
+      
+      // Check if we can reach GitHub
+      execSync('git ls-remote --exit-code origin HEAD', { 
+        cwd: workDir, 
+        encoding: 'utf8',
+        timeout: 10000,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      // Check for uncommitted changes
+      const status = execSync('git status --porcelain', { cwd: workDir, encoding: 'utf8' });
+      const uncommitted = status.trim().split('\n').filter(l => l).length;
+      
+      if (uncommitted > 10) {
+        return { status: 'degraded', message: `${uncommitted} uncommitted files` };
+      } else if (uncommitted > 0) {
+        return { status: 'ok', message: `${uncommitted} uncommitted` };
+      }
+      
+      return { status: 'ok', message: 'Clean, remote reachable' };
+    } catch (e) {
+      if (e.message?.includes('timeout')) {
+        return { status: 'error', message: 'GitHub unreachable (timeout)' };
+      }
+      return { status: 'error', message: e.message?.slice(0, 40) || 'Git error' };
     }
   }
 };
