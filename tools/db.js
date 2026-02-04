@@ -417,6 +417,144 @@ function activityStats(period = 'day') {
 }
 
 // ============================================================
+// HEARTBEAT COSTS
+// ============================================================
+
+function heartbeatCosts(options = {}) {
+  const sinceDays = options.since || 7;
+  
+  // Query activity logs where action starts with 'heartbeat_' or category is 'heartbeat'
+  const activities = db.db.prepare(`
+    SELECT 
+      id,
+      action,
+      category,
+      description,
+      metadata,
+      created_at
+    FROM activity 
+    WHERE (action LIKE 'heartbeat_%' OR category = 'heartbeat')
+      AND created_at > datetime('now', '-' || ? || ' days')
+    ORDER BY created_at DESC
+  `).all(sinceDays);
+  
+  if (activities.length === 0) {
+    console.log(`\n📊 No heartbeat activity found in the last ${sinceDays} days.\n`);
+    return;
+  }
+  
+  // Haiku 4.5 pricing: $0.80 per million input tokens, $4.00 per million output tokens
+  const PRICING_INPUT = 0.80 / 1_000_000;  // per token
+  const PRICING_OUTPUT = 4.00 / 1_000_000; // per token
+  
+  let totalHeartbeats = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCalculatedCost = 0;
+  let totalLoggedCost = 0;
+  
+  // Group by day for daily averages
+  const dailyStats = {};
+  
+  for (const act of activities) {
+    totalHeartbeats++;
+    
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let loggedCost = 0;
+    
+    // Parse metadata
+    if (act.metadata) {
+      try {
+        const metadata = JSON.parse(act.metadata);
+        inputTokens = parseInt(metadata.input_tokens) || 0;
+        outputTokens = parseInt(metadata.output_tokens) || 0;
+        loggedCost = parseFloat(metadata.cost_usd) || 0;
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+    
+    totalInputTokens += inputTokens;
+    totalOutputTokens += outputTokens;
+    totalLoggedCost += loggedCost;
+    
+    // Calculate cost using Haiku pricing
+    const calculatedCost = (inputTokens * PRICING_INPUT) + (outputTokens * PRICING_OUTPUT);
+    totalCalculatedCost += calculatedCost;
+    
+    // Group by date for daily stats
+    const date = act.created_at.split('T')[0];
+    if (!dailyStats[date]) {
+      dailyStats[date] = {
+        count: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0
+      };
+    }
+    dailyStats[date].count++;
+    dailyStats[date].inputTokens += inputTokens;
+    dailyStats[date].outputTokens += outputTokens;
+    dailyStats[date].cost += calculatedCost;
+  }
+  
+  // Calculate averages
+  const avgCostPerHeartbeat = totalHeartbeats > 0 ? totalCalculatedCost / totalHeartbeats : 0;
+  const avgDailyHeartbeats = Object.keys(dailyStats).length > 0 ? 
+    totalHeartbeats / Object.keys(dailyStats).length : 0;
+  const avgDailyCost = Object.keys(dailyStats).length > 0 ? 
+    totalCalculatedCost / Object.keys(dailyStats).length : 0;
+  
+  console.log(`\n📊 Heartbeat Costs (Last ${sinceDays} days)\n`);
+  console.log(`  Total heartbeats: ${totalHeartbeats.toLocaleString()}`);
+  console.log(`  Total input tokens: ${totalInputTokens.toLocaleString()}`);
+  console.log(`  Total output tokens: ${totalOutputTokens.toLocaleString()}`);
+  console.log(`  Calculated cost (Haiku 4.5): $${totalCalculatedCost.toFixed(6)}`);
+  console.log(`  Logged cost (from metadata): $${totalLoggedCost.toFixed(6)}`);
+  console.log(`  Average cost per heartbeat: $${avgCostPerHeartbeat.toFixed(6)}`);
+  console.log(`  Daily average heartbeats: ${avgDailyHeartbeats.toFixed(1)}`);
+  console.log(`  Daily average cost: $${avgDailyCost.toFixed(6)}`);
+  console.log(`  Pricing used: $0.80/M input, $4.00/M output`);
+  
+  // Show daily breakdown if there are multiple days
+  const sortedDates = Object.keys(dailyStats).sort().reverse();
+  if (sortedDates.length > 1) {
+    console.log(`\n  Daily Breakdown:`);
+    for (const date of sortedDates.slice(0, 14)) { // Show up to last 14 days
+      const stats = dailyStats[date];
+      console.log(`    ${date}: ${stats.count} heartbeats, $${stats.cost.toFixed(6)}`);
+    }
+  }
+  
+  // Show recent heartbeats
+  console.log(`\n  Recent Heartbeats (last 5):`);
+  const recent = activities.slice(0, 5);
+  for (const act of recent) {
+    const date = new Date(act.created_at).toLocaleString();
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let loggedCost = 0;
+    
+    if (act.metadata) {
+      try {
+        const metadata = JSON.parse(act.metadata);
+        inputTokens = parseInt(metadata.input_tokens) || 0;
+        outputTokens = parseInt(metadata.output_tokens) || 0;
+        loggedCost = parseFloat(metadata.cost_usd) || 0;
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+    
+    const calculatedCost = (inputTokens * PRICING_INPUT) + (outputTokens * PRICING_OUTPUT);
+    console.log(`    ${date}: ${inputTokens.toLocaleString()}+${outputTokens.toLocaleString()} tokens, $${calculatedCost.toFixed(6)}`);
+  }
+  
+  console.log('');
+}
+
+// ============================================================
 // HEALTH
 // ============================================================
 
@@ -643,6 +781,9 @@ ACTIVITY
   activity summary                       Daily summary with statistics
   activity stats [--period day|week|month] Activity statistics
 
+HEARTBEAT COSTS
+  heartbeat-costs [--since 7]           Show heartbeat token usage and costs
+
 HEALTH
   health                                 Integration status
 
@@ -761,6 +902,10 @@ try {
         };
         activityShow(options);
       }
+      break;
+      
+    case 'heartbeat-costs':
+      heartbeatCosts({ since: flags.since ? parseInt(flags.since) : 7 });
       break;
       
     case 'health':
