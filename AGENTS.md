@@ -49,6 +49,17 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - When you make a mistake → document it so future-you doesn't repeat it
 - **Text > Brain** 📝
 
+### ⏱️ Memory Checkpoints (During Active Chat)
+You don't have a timer or automatic triggers. Use judgment:
+- **After major decisions** → log immediately to daily memory
+- **After significant work** → log before moving to next topic  
+- **If conversation feels "long"** → checkpoint what's happened so far
+- **Before spawning long sub-agents** → in case main context compacts
+
+Why: If context compacts mid-session, anything not written is lost. Session transcripts exist but are 5MB of raw JSON — daily memory is your curated summary.
+
+When in doubt, log it. 30 seconds of writing beats hours of reconstruction.
+
 ## Safety
 
 - Don't exfiltrate private data. Ever.
