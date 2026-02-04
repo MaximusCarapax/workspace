@@ -1,160 +1,192 @@
 #!/usr/bin/env node
 /**
- * Mission Control Dashboard - Express Server
- * Serves API endpoints for journals, content, insights, and stats
+ * Mission Control Dashboard
+ * 
+ * Simple Express server showing health, costs, and tasks.
+ * Run: node dashboard/server.js
+ * View: http://localhost:3001
  */
 
 const express = require('express');
-const fs = require('fs').promises;
 const path = require('path');
+const db = require('../lib/db');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.DASHBOARD_PORT || 3001;
 
-// --- Middleware ---
-
-// Enable CORS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
-
-// Request logging
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
-
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
-
-// --- Helper Functions ---
-
-async function readJsonFile(filePath) {
+// API Endpoints
+app.get('/api/health', (req, res) => {
   try {
-    const data = await fs.readFile(filePath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      throw new Error(`File not found: ${filePath}`, { cause: 404 });
+    const health = db.getLatestHealth();
+    res.json(health);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/costs', (req, res) => {
+  try {
+    const today = db.getCostsToday();
+    const byModel = db.getCostsByModel(7);
+    res.json({ today, byModel });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/tasks', (req, res) => {
+  try {
+    const inProgress = db.getTasks({ status: 'in_progress', limit: 1 });
+    const done = db.db.prepare(`
+      SELECT * FROM tasks WHERE status = 'done' 
+      ORDER BY updated_at DESC LIMIT 5
+    `).all();
+    res.json({ current: inProgress[0] || null, recent: done });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dashboard HTML
+const dashboardHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mission Control</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e; 
+      color: #eee; 
+      padding: 20px;
+      min-height: 100vh;
     }
-    if (error instanceof SyntaxError) {
-      throw new Error(`Invalid JSON: ${filePath}`, { cause: 500 });
+    h1 { margin-bottom: 20px; color: #fff; }
+    h2 { margin: 20px 0 10px; color: #aaa; font-size: 14px; text-transform: uppercase; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .card { 
+      background: #16213e; 
+      border-radius: 8px; 
+      padding: 20px;
+      border: 1px solid #0f3460;
     }
-    throw error;
-  }
-}
-
-// --- API Endpoints ---
-
-// GET /api/journals - list memory files
-app.get('/api/journals', async (req, res, next) => {
-  const memoryDir = path.join(__dirname, '..', 'memory');
-  try {
-    const files = await fs.readdir(memoryDir);
-    const journals = await Promise.all(
-      files
-        .filter(f => f.endsWith('.md'))
-        .map(async file => {
-          const filePath = path.join(memoryDir, file);
-          const stats = await fs.stat(filePath);
-          const dateMatch = file.match(/^(\d{4}-\d{2}-\d{2})\.md$/);
-          return {
-            filename: file,
-            date: dateMatch ? dateMatch[1] : null,
-            modified: stats.mtime.toISOString()
-          };
-        })
-    );
-    res.json(journals.filter(j => j.date).sort((a, b) => b.date.localeCompare(a.date)));
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return res.status(404).json({ error: 'Memory directory not found' });
+    .health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .health-item { 
+      padding: 10px; 
+      border-radius: 4px; 
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    next(error);
-  }
-});
+    .health-item.ok { background: #0a3d0a; }
+    .health-item.degraded { background: #3d3d0a; }
+    .health-item.error { background: #3d0a0a; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot.ok { background: #4ade80; }
+    .dot.degraded { background: #facc15; }
+    .dot.error { background: #f87171; }
+    .cost-big { font-size: 32px; font-weight: bold; color: #4ade80; }
+    .cost-table { width: 100%; margin-top: 10px; }
+    .cost-table td { padding: 4px 0; }
+    .cost-table td:last-child { text-align: right; color: #aaa; }
+    .task { padding: 8px 0; border-bottom: 1px solid #0f3460; }
+    .task:last-child { border-bottom: none; }
+    .task-status { display: inline-block; width: 20px; }
+    .task-current { background: #1e3a5f; padding: 10px; border-radius: 4px; }
+    .no-task { color: #666; font-style: italic; }
+    .refresh { color: #666; font-size: 12px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>🎛️ Mission Control</h1>
+  
+  <div class="grid">
+    <div class="card">
+      <h2>System Health</h2>
+      <div id="health" class="health-grid">Loading...</div>
+    </div>
+    
+    <div class="card">
+      <h2>Costs (Today)</h2>
+      <div id="cost-total" class="cost-big">$0.00</div>
+      <table id="cost-breakdown" class="cost-table"></table>
+    </div>
+  </div>
+  
+  <h2>Current Task</h2>
+  <div class="card">
+    <div id="current-task" class="task-current">Loading...</div>
+  </div>
+  
+  <h2>Recently Completed</h2>
+  <div class="card">
+    <div id="recent-tasks">Loading...</div>
+  </div>
+  
+  <div class="refresh">Auto-refreshes every 60 seconds. Last update: <span id="last-update">-</span></div>
 
-// GET /api/journals/:date - get journal content
-app.get('/api/journals/:date', async (req, res, next) => {
-  const { date } = req.params;
-  const filePath = path.join(__dirname, '..', 'memory', `${date}.md`);
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    res.type('text/markdown').send(content);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return res.status(404).json({ error: `Journal for ${date} not found` });
+  <script>
+    async function fetchData() {
+      try {
+        // Health
+        const healthRes = await fetch('/api/health');
+        const health = await healthRes.json();
+        document.getElementById('health').innerHTML = health.map(h => 
+          \`<div class="health-item \${h.status}">
+            <span class="dot \${h.status}"></span>
+            <span>\${h.integration}</span>
+          </div>\`
+        ).join('');
+        
+        // Costs
+        const costsRes = await fetch('/api/costs');
+        const costs = await costsRes.json();
+        document.getElementById('cost-total').textContent = '$' + (costs.today?.total_cost || 0).toFixed(2);
+        document.getElementById('cost-breakdown').innerHTML = (costs.byModel || []).slice(0, 5).map(m =>
+          \`<tr><td>\${m.model || 'unknown'}</td><td>$\${(m.total_cost || 0).toFixed(4)}</td></tr>\`
+        ).join('');
+        
+        // Tasks
+        const tasksRes = await fetch('/api/tasks');
+        const tasks = await tasksRes.json();
+        
+        if (tasks.current) {
+          document.getElementById('current-task').innerHTML = 
+            \`🔄 <strong>\${tasks.current.title}</strong>\`;
+        } else {
+          document.getElementById('current-task').innerHTML = 
+            \`<span class="no-task">No task in progress</span>\`;
+        }
+        
+        document.getElementById('recent-tasks').innerHTML = tasks.recent.length 
+          ? tasks.recent.map(t => 
+              \`<div class="task"><span class="task-status">✅</span> \${t.title}</div>\`
+            ).join('')
+          : '<span class="no-task">No completed tasks</span>';
+        
+        // Update timestamp
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+      } catch (err) {
+        console.error('Fetch error:', err);
+      }
     }
-    next(error);
-  }
+    
+    // Initial fetch
+    fetchData();
+    
+    // Auto-refresh every 60 seconds
+    setInterval(fetchData, 60000);
+  </script>
+</body>
+</html>`;
+
+app.get('/', (req, res) => {
+  res.send(dashboardHTML);
 });
 
-// GET /api/content - content calendar
-app.get('/api/content', async (req, res, next) => {
-  try {
-    const data = await readJsonFile(path.join(__dirname, 'data', 'content-calendar.json'));
-    res.json(data);
-  } catch (error) {
-    if (error.cause === 404) return res.status(404).json({ error: error.message });
-    next(error);
-  }
-});
-
-// GET /api/insights - insights data
-app.get('/api/insights', async (req, res, next) => {
-  try {
-    const data = await readJsonFile(path.join(__dirname, 'data', 'insights.json'));
-    res.json(data);
-  } catch (error) {
-    if (error.cause === 404) return res.status(404).json({ error: error.message });
-    next(error);
-  }
-});
-
-// GET /api/x-stats - X posting stats
-app.get('/api/x-stats', async (req, res, next) => {
-  try {
-    const data = await readJsonFile(path.join(__dirname, 'data', 'x-post-stats.json'));
-    res.json(data);
-  } catch (error) {
-    if (error.cause === 404) return res.status(404).json({ error: error.message });
-    next(error);
-  }
-});
-
-// GET /api/reddit-pulse - Reddit pulse history
-app.get('/api/reddit-pulse', async (req, res, next) => {
-  try {
-    const data = await readJsonFile(path.join(__dirname, 'data', 'reddit-pulse-history.json'));
-    res.json(data);
-  } catch (error) {
-    if (error.cause === 404) return res.status(404).json({ error: error.message });
-    next(error);
-  }
-});
-
-// GET /api/memory - MEMORY.md contents
-app.get('/api/memory', async (req, res, next) => {
-  try {
-    const content = await fs.readFile(path.join(__dirname, '..', 'MEMORY.md'), 'utf8');
-    res.type('text/markdown').send(content);
-  } catch (error) {
-    if (error.code === 'ENOENT') return res.status(404).json({ error: 'MEMORY.md not found' });
-    next(error);
-  }
-});
-
-// --- Error Handler ---
-
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error', details: err.message });
-});
-
-// --- Start Server ---
-
+// Start server
 app.listen(PORT, () => {
-  console.log(`🎛️  Mission Control running on http://localhost:${PORT}`);
+  console.log(`🎛️  Mission Control running at http://localhost:${PORT}`);
 });
