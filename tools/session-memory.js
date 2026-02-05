@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const { program } = require('commander');
-const db = require('./lib/db');
+const db = require('../lib/db');
 
 // Constants from spec
 const MAX_CHUNK_SIZE = 500; // tokens (~2000 chars)
@@ -474,7 +474,7 @@ async function statusCommand() {
         const totalChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks').get()?.count || 0;
         const totalSessions = sqlite.prepare('SELECT COUNT(DISTINCT session_id) as count FROM session_chunks').get()?.count || 0;
         const avgTokens = sqlite.prepare('SELECT AVG(token_count) as avg FROM session_chunks').get()?.avg || 0;
-        const recentChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE created_at > datetime("now", "-24 hours")').get()?.count || 0;
+        const recentChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE created_at > datetime(\'now\', \'-24 hours\')').get()?.count || 0;
         
         sqlite.close();
         
