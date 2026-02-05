@@ -18,6 +18,7 @@
 const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const db = require('../lib/db');
 
 // Paths
 const credsPath = path.join(process.env.HOME, '.openclaw/secrets/credentials.json');
@@ -114,6 +115,12 @@ async function checkMentionsBird() {
       mentions: formatted
     };
   } catch (e) {
+    db.logError({
+      source: 'x-mentions',
+      message: e.message,
+      details: 'Bird CLI command failed while checking mentions',
+      stack: e.stack
+    });
     throw new Error(`Bird CLI failed: ${e.message}`);
   }
 }
@@ -185,6 +192,12 @@ async function checkMentionsAPI(state) {
       quotaUsed: state.apiUsageThisMonth
     };
   } catch (e) {
+    db.logError({
+      source: 'x-mentions',
+      message: e.message,
+      details: 'X API request failed while fetching mentions',
+      stack: e.stack
+    });
     throw new Error(`X API failed: ${e.message}`);
   }
 }
@@ -208,6 +221,12 @@ async function checkMentions(showAll = false) {
       usedFallback = true;
       console.log(`✓ Using X API (${result.quotaUsed}/100 reads this month)`);
     } catch (apiError) {
+      db.logError({
+        source: 'x-mentions',
+        message: apiError.message,
+        details: 'Failed to check mentions via both Bird CLI and X API',
+        stack: apiError.stack
+      });
       console.error(`✗ X API also failed: ${apiError.message}`);
       return { error: 'Both Bird CLI and X API failed', details: { birdError: birdError.message, apiError: apiError.message } };
     }

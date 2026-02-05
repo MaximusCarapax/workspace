@@ -16,6 +16,7 @@
 
 const { addContentItem, getContentItems, getContentItem, updateContentItem, deleteContentItem } = require('../lib/db');
 const { route } = require('../lib/router');
+const db = require('../lib/db');
 
 // Parse args
 const args = process.argv.slice(2);
@@ -90,6 +91,12 @@ const commands = {
       });
       console.log(`✅ Added item ${id}: "${truncate(content, 60)}"`);
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to add content item to database',
+        stack: error.stack
+      });
       console.error(`❌ Failed to add item: ${error.message}`);
       process.exit(1);
     }
@@ -172,6 +179,12 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       console.log(`\nStatus updated to 'hooks'. Use "content select ${id} <number>" to choose one.`);
 
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to generate hooks for content item',
+        stack: error.stack
+      });
       console.error(`❌ Failed to generate hooks: ${error.message}`);
       process.exit(1);
     }
@@ -210,6 +223,12 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       }
       console.log('');
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to list content items from database',
+        stack: error.stack
+      });
       console.error(`❌ Failed to list items: ${error.message}`);
       process.exit(1);
     }
@@ -274,6 +293,12 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       }
       console.log('');
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to view content item from database',
+        stack: error.stack
+      });
       console.error(`❌ Failed to view item: ${error.message}`);
       process.exit(1);
     }
@@ -312,6 +337,12 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       updateContentItem(parseInt(id), updates);
       console.log(`✅ Updated item ${id}`);
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to update content item in database',
+        stack: error.stack
+      });
       console.error(`❌ Failed to update item: ${error.message}`);
       process.exit(1);
     }
@@ -340,6 +371,12 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       
       console.log(`📅 Scheduled item ${id} for ${formatDate(new Date(time).toISOString())}`);
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to schedule content item in database',
+        stack: error.stack
+      });
       console.error(`❌ Failed to schedule item: ${error.message}`);
       process.exit(1);
     }
@@ -366,6 +403,12 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       
       console.log(`✅ Marked item ${id} as posted`);
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to mark content item as published in database',
+        stack: error.stack
+      });
       console.error(`❌ Failed to mark as published: ${error.message}`);
       process.exit(1);
     }
