@@ -67,6 +67,12 @@ program
   .option('--title <title>', 'Custom title (default: extracted from content)')
   .action(async (url, options) => {
     try {
+      // Basic URL validation
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        console.error('❌ Error: URL must start with http:// or https://');
+        process.exit(1);
+      }
+      
       console.log(`📚 Learning from ${url}...`);
       // For now, we'll implement a basic version
       // In the future, this should fetch and summarize the content
@@ -85,6 +91,7 @@ program
       console.log(`✅ Knowledge learned and stored with ID: ${id}`);
       console.log(`   Title: ${title}`);
       console.log(`   Source: ${url}`);
+      console.log(`   Note: This is a basic entry. Future versions will fetch and summarize the content.`);
     } catch (error) {
       console.error('❌ Error:', error.message);
       process.exit(1);
