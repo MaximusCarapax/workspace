@@ -133,10 +133,13 @@ const commands = {
     const item = {
       id: genId(data),
       hook: content,          // Original idea/hook
+      selected_hook: null,    // Chosen hook from generated options
       content: null,          // Full drafted content (null until drafted)
       platform: getFlag('--platform') || 'linkedin',
       status: 'idea',
       scores: null,           // { hook, authenticity, value, engagement, fit }
+      review_score: null,     // AI review score (1-10)
+      review_notes: null,     // AI review feedback
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       scheduledFor: null,
@@ -155,13 +158,12 @@ const commands = {
   
   draft: () => {
     const id = args[1];
-    const content = args.slice(2).filter(a => !a.startsWith('--')).join(' ');
     
-    if (!id || !content) {
-      console.log('Usage: content draft <id> "Full post content here"');
+    if (!id) {
+      console.log('Usage: content draft <id>');
       console.log('');
-      console.log('Write the complete post as you want it published.');
-      console.log('For LinkedIn: 150-300 words. For X: under 280 chars.');
+      console.log('AI will expand the selected hook into a full post.');
+      console.log('Item must have a selected_hook field.');
       process.exit(1);
     }
     
@@ -173,13 +175,177 @@ const commands = {
       process.exit(1);
     }
     
-    item.content = content;
-    item.status = 'draft';
-    item.updatedAt = new Date().toISOString();
-    saveData(data);
+    if (!item.selected_hook) {
+      console.log(`❌ Item ${id} has no selected hook. Generate hooks first.`);
+      process.exit(1);
+    }
     
-    console.log(`📝 Drafted ${item.id} (${content.length} chars)`);
-    console.log(`   Next: score it with: node content.js score ${item.id} --hook 4 --auth 4 --value 4 --engage 4 --fit 4`);
+    console.log(`🤖 Generating draft for ${item.id}...`);
+    
+    // Build the prompt for Gemini
+    const prompt = `Hook: ${item.selected_hook}
+Platform: ${item.platform}
+Original idea: ${item.hook || 'N/A'} - ${item.notes || 'N/A'}
+
+Write a ${item.platform} post that:
+- Opens with this hook
+- Delivers value (teach, entertain, or provoke)
+- Ends with a CTA or question
+- Matches platform conventions
+
+Keep it punchy. No fluff.`;
+    
+    // Call Gemini API
+    const { exec } = require('child_process');
+    const path = require('path');
+    const geminiPath = path.join(__dirname, 'gemini.js');
+    
+    exec(`node "${geminiPath}" "${prompt.replace(/"/g, '\\"')}"`, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`❌ AI call failed: ${error.message}`);
+        process.exit(1);
+      }
+      
+      if (stderr) {
+        console.log(`⚠️ AI warning: ${stderr}`);
+      }
+      
+      const generatedContent = stdout.trim();
+      
+      if (!generatedContent) {
+        console.log(`❌ AI returned empty content`);
+        process.exit(1);
+      }
+      
+      // Update the item
+      item.content = generatedContent;
+      item.status = 'draft';
+      item.updatedAt = new Date().toISOString();
+      saveData(data);
+      
+      console.log(`📝 AI drafted ${item.id} (${generatedContent.length} chars)`);
+      console.log(`   Next: review it with: node content.js review ${item.id}`);
+      console.log('');
+      console.log('Generated content:');
+      console.log('─'.repeat(50));
+      console.log(generatedContent);
+    });
+  },
+
+  review: () => {
+    const id = args[1];
+    
+    if (!id) {
+      console.log('Usage: content review <id>');
+      console.log('');
+      console.log('AI will score the draft against 5 criteria and provide feedback.');
+      process.exit(1);
+    }
+    
+    const data = loadData();
+    const item = data.items.find(i => i.id.toLowerCase() === id.toLowerCase());
+    
+    if (!item) {
+      console.log(`❌ Item ${id} not found`);
+      process.exit(1);
+    }
+    
+    if (!item.content) {
+      console.log(`❌ Item ${id} has no draft content. Draft it first.`);
+      process.exit(1);
+    }
+    
+    console.log(`🔍 AI reviewing ${item.id}...`);
+    
+    // Build the prompt for Gemini
+    const prompt = `Draft: ${item.content}
+Platform: ${item.platform}
+
+Score this draft on 5 criteria (1-10 scale):
+1. Hook strength - Does it stop the scroll?
+2. Clarity - Is the message clear and concise?
+3. Value delivered - Does it teach, entertain, or provoke?
+4. CTA effectiveness - Does it encourage engagement?
+5. Platform fit - Does it match platform conventions?
+
+Return JSON: {"hook_score": N, "clarity_score": N, "value_score": N, "cta_score": N, "platform_score": N, "average_score": N.N, "notes": "detailed feedback"}`;
+    
+    // Call Gemini API
+    const { exec } = require('child_process');
+    const path = require('path');
+    const geminiPath = path.join(__dirname, 'gemini.js');
+    
+    exec(`node "${geminiPath}" "${prompt.replace(/"/g, '\\"')}"`, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`❌ AI call failed: ${error.message}`);
+        process.exit(1);
+      }
+      
+      if (stderr) {
+        console.log(`⚠️ AI warning: ${stderr}`);
+      }
+      
+      const responseText = stdout.trim();
+      
+      if (!responseText) {
+        console.log(`❌ AI returned empty response`);
+        process.exit(1);
+      }
+      
+      let review;
+      try {
+        // Try to parse JSON from the response
+        const jsonMatch = responseText.match(/\{.*\}/s);
+        if (jsonMatch) {
+          review = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('No JSON found in response');
+        }
+      } catch (e) {
+        console.log(`❌ Failed to parse AI response as JSON: ${e.message}`);
+        console.log(`Raw response: ${responseText}`);
+        process.exit(1);
+      }
+      
+      // Validate the review structure
+      if (!review.average_score || typeof review.average_score !== 'number') {
+        console.log(`❌ Invalid review format: missing or invalid average_score`);
+        process.exit(1);
+      }
+      
+      // Update the item
+      item.review_score = review.average_score;
+      item.review_notes = review.notes || 'No detailed feedback provided';
+      item.status = 'review';
+      item.updatedAt = new Date().toISOString();
+      saveData(data);
+      
+      const score = review.average_score;
+      const status = score >= 7 ? '✅ APPROVED' : score >= 5 ? '⚠️ NEEDS WORK' : '❌ REJECTED';
+      
+      console.log(`🔍 AI reviewed ${item.id}: ${score}/10 — ${status}`);
+      
+      // Show breakdown
+      console.log('');
+      console.log('Breakdown:');
+      if (review.hook_score) console.log(`  Hook strength:    ${review.hook_score}/10`);
+      if (review.clarity_score) console.log(`  Clarity:          ${review.clarity_score}/10`);
+      if (review.value_score) console.log(`  Value delivered:  ${review.value_score}/10`);
+      if (review.cta_score) console.log(`  CTA effectiveness: ${review.cta_score}/10`);
+      if (review.platform_score) console.log(`  Platform fit:     ${review.platform_score}/10`);
+      
+      console.log('');
+      console.log('Feedback:');
+      console.log(review.notes);
+      
+      if (score >= 7) {
+        console.log('');
+        console.log(`Next: schedule with: node content.js approve ${item.id} --date "YYYY-MM-DD"`);
+      } else {
+        console.log('');
+        console.log('Consider revising the draft or creating a new one.');
+      }
+    });
   },
   
   score: () => {
@@ -560,45 +726,177 @@ const commands = {
     console.log(`🗑️ Deleted ${removed.id}: "${truncate(removed.hook || removed.content, 40)}"`);
   },
   
+  kanban: () => {
+    const data = loadData();
+    const items = data.items;
+    
+    // Group items by status (map old status names to display names)
+    const statusMapping = {
+      idea: 'IDEAS',
+      hooks: 'HOOKS', 
+      draft: 'DRAFTS',
+      review: 'REVIEW',
+      reviewed: 'REVIEW', // map old 'reviewed' to 'REVIEW'
+      scheduled: 'SCHEDULED',
+      published: 'POSTED'
+    };
+    
+    const columns = {
+      'IDEAS': [],
+      'HOOKS': [],
+      'DRAFTS': [], 
+      'REVIEW': [],
+      'SCHEDULED': [],
+      'POSTED': []
+    };
+    
+    // Group items into columns
+    items.forEach(item => {
+      const displayStatus = statusMapping[item.status] || item.status.toUpperCase();
+      if (columns[displayStatus]) {
+        columns[displayStatus].push(item);
+      }
+    });
+    
+    // Calculate column widths (aim for ~15 chars each, adjust based on content)
+    const colWidth = 18;
+    const statusKeys = ['IDEAS', 'HOOKS', 'DRAFTS', 'REVIEW', 'SCHEDULED', 'POSTED'];
+    
+    // Print headers with counts
+    console.log('');
+    const headerLine = statusKeys
+      .map(status => `${status} (${columns[status].length})`.padEnd(colWidth))
+      .join('');
+    console.log(headerLine);
+    
+    // Print separator line
+    console.log('─'.repeat(headerLine.length));
+    
+    // Find max rows needed
+    const maxRows = Math.max(...statusKeys.map(status => columns[status].length), 1);
+    
+    // Print items row by row
+    for (let row = 0; row < maxRows; row++) {
+      const rowData = statusKeys.map(status => {
+        const items = columns[status];
+        if (row < items.length) {
+          const item = items[row];
+          const title = truncate(item.hook || item.content || '(no content)', 15);
+          return `${item.id}: ${title}`.padEnd(colWidth);
+        } else {
+          return '-'.padEnd(colWidth);
+        }
+      }).join('');
+      
+      console.log(rowData);
+    }
+    console.log('');
+  },
+  
   stats: () => {
     const data = loadData();
     const items = data.items;
     
-    const byStatus = { idea: 0, draft: 0, reviewed: 0, scheduled: 0, published: 0 };
+    // Enhanced status mapping for display
+    const statusMapping = {
+      idea: 'IDEAS',
+      hooks: 'HOOKS',
+      draft: 'DRAFTS', 
+      review: 'REVIEW',
+      reviewed: 'REVIEW', // map old 'reviewed' to 'REVIEW'
+      scheduled: 'SCHEDULED',
+      published: 'POSTED'
+    };
+    
+    const byStatus = {};
     const byPlatform = { linkedin: 0, x: 0, both: 0 };
     
+    // Count by mapped status
     items.forEach(i => {
-      byStatus[i.status] = (byStatus[i.status] || 0) + 1;
+      const displayStatus = statusMapping[i.status] || i.status;
+      byStatus[displayStatus] = (byStatus[displayStatus] || 0) + 1;
       byPlatform[i.platform] = (byPlatform[i.platform] || 0) + 1;
     });
     
-    console.log('\n📊 Content Stats');
-    console.log('─'.repeat(40));
+    console.log('\n📊 Content Pipeline Stats');
+    console.log('─'.repeat(50));
     console.log(`Total items: ${items.length}`);
     console.log('');
+    
+    // Status breakdown with better formatting
     console.log('By Status:');
-    Object.entries(byStatus).forEach(([s, c]) => {
-      if (c > 0) console.log(`  ${statusEmoji(s)} ${s}: ${c}`);
+    const statusOrder = ['IDEAS', 'HOOKS', 'DRAFTS', 'REVIEW', 'SCHEDULED', 'POSTED'];
+    statusOrder.forEach(status => {
+      const count = byStatus[status] || 0;
+      if (count > 0) {
+        const emoji = status === 'IDEAS' ? '💡' : 
+                     status === 'HOOKS' ? '🪝' :
+                     status === 'DRAFTS' ? '📝' :
+                     status === 'REVIEW' ? '🔍' :
+                     status === 'SCHEDULED' ? '📅' : '🚀';
+        console.log(`  ${emoji} ${status}: ${count}`);
+      }
     });
+    
     console.log('');
     console.log('By Platform:');
     Object.entries(byPlatform).forEach(([p, c]) => {
       if (c > 0) console.log(`  ${platformEmoji(p)} ${p}: ${c}`);
     });
     
-    // Score analysis for published items
-    const published = items.filter(i => i.status === 'published' && i.scores && i.performance);
-    if (published.length > 0) {
-      console.log('');
-      console.log('📈 Score vs Performance (published):');
-      published.forEach(i => {
-        const score = totalScore(i.scores);
-        const rate = i.performance.impressions > 0 
-          ? ((i.performance.engagements / i.performance.impressions) * 100).toFixed(1) 
-          : '?';
-        console.log(`  ${i.id}: ${score}/25 → ${rate}% engagement`);
+    // Review score analysis
+    const scoredItems = items.filter(i => i.scores);
+    if (scoredItems.length > 0) {
+      const avgScores = {
+        hook: 0, authenticity: 0, value: 0, engagement: 0, fit: 0
+      };
+      
+      scoredItems.forEach(item => {
+        avgScores.hook += item.scores.hook || 0;
+        avgScores.authenticity += item.scores.authenticity || 0;
+        avgScores.value += item.scores.value || 0;
+        avgScores.engagement += item.scores.engagement || 0;
+        avgScores.fit += item.scores.fit || 0;
       });
+      
+      Object.keys(avgScores).forEach(key => {
+        avgScores[key] = (avgScores[key] / scoredItems.length).toFixed(1);
+      });
+      
+      const avgTotal = (scoredItems.reduce((sum, item) => sum + totalScore(item.scores), 0) / scoredItems.length).toFixed(1);
+      
+      console.log('');
+      console.log(`📋 Review Scores (${scoredItems.length} items scored):`);
+      console.log(`  Average Total: ${avgTotal}/25.0`);
+      console.log(`  Hook:         ${avgScores.hook}/5.0`);
+      console.log(`  Authenticity: ${avgScores.authenticity}/5.0`);
+      console.log(`  Value:        ${avgScores.value}/5.0`);
+      console.log(`  Engagement:   ${avgScores.engagement}/5.0`);
+      console.log(`  Platform Fit: ${avgScores.fit}/5.0`);
     }
+    
+    // Time-based stats
+    const now = new Date();
+    const oneWeekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    
+    const postsThisWeek = items.filter(i => 
+      i.status === 'published' && i.createdAt && new Date(i.createdAt) >= oneWeekAgo
+    ).length;
+    
+    const postsThisMonth = items.filter(i => 
+      i.status === 'published' && i.createdAt && new Date(i.createdAt) >= oneMonthAgo
+    ).length;
+    
+    const newIdeasThisWeek = items.filter(i =>
+      i.status === 'idea' && i.createdAt && new Date(i.createdAt) >= oneWeekAgo
+    ).length;
+    
+    console.log('');
+    console.log('📅 Recent Activity:');
+    console.log(`  Posts this week:  ${postsThisWeek}`);
+    console.log(`  Posts this month: ${postsThisMonth}`);
+    console.log(`  New ideas this week: ${newIdeasThisWeek}`);
     
     // Upcoming scheduled
     const scheduled = items
@@ -608,10 +906,10 @@ const commands = {
     
     if (scheduled.length > 0) {
       console.log('');
-      console.log('📅 Upcoming:');
+      console.log('📅 Next up:');
       scheduled.forEach(i => {
         const score = i.scores ? `[${totalScore(i.scores)}/25]` : '';
-        console.log(`  ${formatDate(i.scheduledFor)} - ${truncate(i.hook, 30)} ${score}`);
+        console.log(`  ${formatDate(i.scheduledFor)} - ${truncate(i.hook, 35)} ${score}`);
       });
     }
     console.log('');
@@ -625,20 +923,22 @@ Workflow: idea → draft → score → schedule → publish → track
 
 Commands:
   add <idea> [--platform linkedin|x|both]     Add new idea
-  draft <id> "Full post content"              Write full draft for an idea
-  score <id> --hook N --auth N --value N      Score a draft (1-5 each)
+  draft <id>                                  AI generates full post from selected hook
+  review <id>                                 AI scores draft on 5 criteria (1-10 scale)
+  score <id> --hook N --auth N --value N      Manual score (1-5 each, legacy)
             --engage N --fit N                Min ${MIN_SCORE}/25 to schedule
   review                                      List items needing review
   schedule <id> --date "YYYY-MM-DD"           Schedule approved content
   publish <id> [--url "..."]                  Mark as published
   track <id> --impressions N --engagements N  Log performance metrics
             --replies N
+  kanban                                      Show content pipeline in columns
   list [--status ...] [--platform ...]        List items
   view <id>                                   View item details
   edit <id> [--hook] [--content] [--status]   Edit item fields
            [--platform] [--notes] [--tags]
   delete <id>                                 Delete item
-  stats                                       Show statistics + insights
+  stats                                       Enhanced pipeline statistics
 
 Statuses: idea → draft → reviewed → scheduled → published
 Platforms: linkedin, x, both
@@ -657,6 +957,8 @@ Examples:
   node content.js schedule C009 --date "2026-02-05"
   node content.js publish C009 --url "https://linkedin.com/posts/..."
   node content.js track C009 --impressions 5000 --engagements 150 --replies 12
+  node content.js kanban                      # View pipeline kanban board
+  node content.js stats                       # Enhanced statistics with scores
 `);
   }
 };
