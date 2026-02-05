@@ -487,7 +487,7 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       try {
         db.logError({
           level: 'error',
-          source: 'content.js',
+          source: 'content',
           message: error.message,
           details: 'Command: stats',
           stack: error.stack
@@ -548,7 +548,7 @@ try {
   try {
     db.logError({
       level: 'error',
-      source: 'content.js',
+      source: 'content',
       message: error.message,
       details: `Command: ${command}`,
       stack: error.stack
