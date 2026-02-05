@@ -546,10 +546,9 @@ try {
   }
 } catch (error) {
   console.error(`❌ Error: ${error.message}`);
-  
+    
   // Log error to database
   try {
-    const db = require('../lib/db');
     db.logError({
       level: 'error',
       source: 'content.js',
@@ -560,6 +559,6 @@ try {
   } catch (dbError) {
     console.error('Failed to log error to database:', dbError.message);
   }
-  
+    
   process.exit(1);
 }

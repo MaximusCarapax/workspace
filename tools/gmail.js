@@ -22,7 +22,11 @@ function loadSecret(key) {
   try {
     const creds = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
     return creds[key] || creds.google?.[key] || null;
-  } catch { return null; }
+  } catch (error) {
+    // Expected condition: credentials file doesn't exist or is invalid
+    // Don't log to error database
+    return null;
+  }
 }
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || loadSecret('google_client_id');

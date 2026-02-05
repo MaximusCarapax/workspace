@@ -31,7 +31,10 @@ const CREDENTIALS_PATH = path.join(process.env.HOME, '.openclaw/secrets/credenti
 let credentials = {};
 try {
   credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
-} catch (e) {}
+} catch (error) {
+  // Expected condition: credentials file doesn't exist or is invalid
+  // Don't log to error database
+}
 
 async function getBrowser() {
   return await chromium.launch({ 

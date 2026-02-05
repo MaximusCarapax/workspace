@@ -42,7 +42,10 @@ function loadBirdCookies() {
     if (authToken && ct0) {
       return { authToken, ct0 };
     }
-  } catch (e) {}
+  } catch (e) {
+    // Expected condition: .env file doesn't exist or is invalid
+    // Don't log to error database
+  }
   return null;
 }
 
@@ -61,7 +64,9 @@ function loadState() {
     const saved = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
     // Merge with defaults to handle missing fields
     return { ...defaultState, ...saved };
-  } catch {
+  } catch (error) {
+    // Expected condition: file doesn't exist or is invalid
+    // Don't log to error database
     return defaultState;
   }
 }

@@ -58,7 +58,8 @@ function migrateLegacyStats() {
         });
         migrated++;
       } catch (e) {
-        // Skip duplicates or errors
+        // Skip duplicates or errors - these are expected
+        // Don't log to error database as they're not real errors
       }
     }
     // Rename old file to mark as migrated
@@ -66,7 +67,9 @@ function migrateLegacyStats() {
       fs.renameSync(statsFile, statsFile + '.migrated');
     }
     return migrated;
-  } catch {
+  } catch (error) {
+    // This is an expected condition (file doesn't exist or is invalid)
+    // Don't log to error database
     return 0;
   }
 }
