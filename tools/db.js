@@ -830,14 +830,18 @@ async function memoryBackfillEmbeddings() {
 // ============================================================
 
 function pipelineBoard() {
-  const stages = ['idea', 'spec', 'building', 'review', 'blocked', 'done'];
+  const stages = ['idea', 'spec', 'spec-review', 'building', 'qa', 'final-review', 'review', 'blocked', 'done', 'live'];
   const stageNames = {
     'idea': '💡 IDEA',
     'spec': '📋 SPEC',
+    'spec-review': '🔍 SPEC-REVIEW',
     'building': '🔨 BUILDING',
+    'qa': '🧪 QA',
+    'final-review': '🎯 FINAL-REVIEW',
     'review': '👀 REVIEW',
     'blocked': '🚫 BLOCKED',
-    'done': '✅ DONE'
+    'done': '✅ DONE',
+    'live': '🟢 LIVE'
   };
   
   console.log('\n📋 Pipeline Kanban Board\n');
@@ -870,6 +874,7 @@ function pipelineBoard() {
 
 function pipelineList(options = {}) {
   const stage = options.stage || null;
+  const parentId = options.parent !== undefined ? (options.parent === 'none' ? null : parseInt(options.parent)) : undefined;
   let sql = `SELECT * FROM pipeline WHERE 1=1`;
   const params = [];
   
@@ -877,7 +882,16 @@ function pipelineList(options = {}) {
     sql += ` AND stage = ?`;
     params.push(stage);
   } else {
-    sql += ` AND stage != 'done'`;
+    sql += ` AND stage NOT IN ('done', 'live')`;
+  }
+  
+  if (parentId !== undefined) {
+    if (parentId === null) {
+      sql += ` AND parent_id IS NULL`;
+    } else {
+      sql += ` AND parent_id = ?`;
+      params.push(parentId);
+    }
   }
   
   sql += ` ORDER BY stage, priority ASC, created_at DESC`;
@@ -889,24 +903,33 @@ function pipelineList(options = {}) {
     return;
   }
   
-  console.log(`\n📋 Pipeline Items${stage ? ` (stage: ${stage})` : ''}\n`);
+  let filterDesc = '';
+  if (stage) filterDesc += ` (stage: ${stage})`;
+  if (parentId !== undefined) filterDesc += parentId === null ? ' (top-level only)' : ` (parent: #${parentId})`;
+  
+  console.log(`\n📋 Pipeline Items${filterDesc}\n`);
   for (const item of items) {
     const assigned = item.assigned_to ? ` [${item.assigned_to}]` : '';
+    const parentInfo = item.parent_id ? ` ← #${item.parent_id}` : '';
     const stageEmoji = {
       'idea': '💡',
       'spec': '📋',
+      'spec-review': '🔍',
       'building': '🔨',
+      'qa': '🧪',
+      'final-review': '🎯',
       'review': '👀',
       'blocked': '🚫',
-      'done': '✅'
+      'done': '✅',
+      'live': '🟢'
     }[item.stage] || '📌';
-    console.log(`  ${stageEmoji} #${item.id}${assigned}: ${item.title}`);
+    console.log(`  ${stageEmoji} #${item.id}${assigned}${parentInfo}: ${item.title}`);
     console.log(`      Stage: ${item.stage} | Priority: ${item.priority} | Created: ${formatDate(item.created_at)}`);
   }
   console.log('');
 }
 
-function pipelineShow(id) {
+function pipelineShow(id, options = {}) {
   const item = db.db.prepare(`SELECT * FROM pipeline WHERE id = ?`).get(id);
   if (!item) {
     console.log(`Pipeline item #${id} not found.`);
@@ -925,16 +948,55 @@ function pipelineShow(id) {
     ORDER BY created_at ASC
   `).all(id);
   
+  // Get parent info if exists
+  let parentInfo = null;
+  if (item.parent_id) {
+    parentInfo = db.db.prepare(`SELECT id, title, stage FROM pipeline WHERE id = ?`).get(item.parent_id);
+  }
+  
+  // Get children if requested or always show count
+  const children = db.db.prepare(`
+    SELECT * FROM pipeline 
+    WHERE parent_id = ? 
+    ORDER BY priority ASC, created_at DESC
+  `).all(id);
+  
   console.log(`\n📋 Pipeline Item #${id}\n`);
   console.log(`  Title: ${item.title}`);
   console.log(`  Stage: ${item.stage}`);
   console.log(`  Priority: ${item.priority}`);
   if (item.assigned_to) console.log(`  Assigned to: ${item.assigned_to}`);
+  if (parentInfo) console.log(`  Parent: #${parentInfo.id} - ${parentInfo.title} (${parentInfo.stage})`);
   if (item.description) console.log(`  Description: ${item.description}`);
   if (item.spec_doc) console.log(`  Spec: ${item.spec_doc}`);
   if (item.acceptance_criteria) console.log(`  Acceptance: ${item.acceptance_criteria}`);
+  if (item.health_check) console.log(`  Health Check: ${item.health_check}`);
   console.log(`  Created: ${formatDate(item.created_at)}`);
   console.log(`  Updated: ${formatDate(item.updated_at)}`);
+  
+  // Show children section
+  if (options.children || children.length > 0) {
+    console.log(`\n  👶 Child Items (${children.length}):`);
+    if (children.length === 0) {
+      console.log(`    No child items.`);
+    } else {
+      for (const child of children) {
+        const stageEmoji = {
+          'idea': '💡',
+          'spec': '📋',
+          'spec-review': '🔍',
+          'building': '🔨',
+          'qa': '🧪',
+          'final-review': '🎯',
+          'review': '👀',
+          'blocked': '🚫',
+          'done': '✅',
+          'live': '🟢'
+        }[child.stage] || '📌';
+        console.log(`    ${stageEmoji} #${child.id}: ${child.title} (${child.stage})`);
+      }
+    }
+  }
   
   console.log(`\n  📝 Notes (${notes.length}):`);
   if (notes.length === 0) {
@@ -983,7 +1045,7 @@ function pipelineMove(id, stage, options = {}) {
     return;
   }
   
-  const validStages = ['idea', 'spec', 'building', 'review', 'blocked', 'done'];
+  const validStages = ['idea', 'spec', 'spec-review', 'building', 'qa', 'final-review', 'review', 'blocked', 'done', 'live'];
   if (!validStages.includes(stage)) {
     console.log(`Invalid stage. Must be one of: ${validStages.join(', ')}`);
     return;
@@ -993,7 +1055,7 @@ function pipelineMove(id, stage, options = {}) {
   if (stage === 'building' && !item.started_at) {
     updates.started_at = new Date().toISOString();
   }
-  if (stage === 'done' && !item.completed_at) {
+  if ((stage === 'done' || stage === 'live') && !item.completed_at) {
     updates.completed_at = new Date().toISOString();
   }
   
@@ -1205,11 +1267,16 @@ HEALTH
   health                                 Integration status
 
 PIPELINE
-  pipeline board                         Kanban view grouped by stage
-  pipeline list [--stage <stage>]        List pipeline items
-  pipeline show <id>                     Show full pipeline item with notes
+  pipeline board                         Kanban view grouped by stage (includes LIVE)
+  pipeline list [--stage <stage>] [--parent <id>]
+                                         List pipeline items with filters
+  pipeline show <id> [--children]        Show full pipeline item with notes
+  pipeline create "Title" [--parent <id>] [--priority 1-4]
+                                         Create new pipeline item (optionally linked)
   pipeline move <id> <stage> [--note "reason"] [--source main|subagent]
                                          Move item to new stage, optionally add note
+                                         Stages: idea, spec, spec-review, building, qa,
+                                                 final-review, review, blocked, done, live
   pipeline note <id> "content" [--type progress|blocker|decision]
                                          Add note to pipeline item
   pipeline assign <id> <agent-session-key>
@@ -1454,10 +1521,33 @@ try {
           pipelineBoard();
           break;
         case 'list':
-          pipelineList({ stage: flags.stage || null });
+          pipelineList({ 
+            stage: flags.stage || null,
+            parent: flags.parent
+          });
           break;
         case 'show':
-          pipelineShow(parseInt(args[2]));
+          pipelineShow(parseInt(args[2]), {
+            children: flags.children === true
+          });
+          break;
+        case 'create':
+          {
+            const title = args[2];
+            if (!title) {
+              console.log('Usage: pipeline create "Title" [--parent <id>] [--priority 1-4]');
+              break;
+            }
+            const newId = db.createPipeline({
+              title,
+              parentId: flags.parent ? parseInt(flags.parent) : null,
+              priority: flags.priority ? parseInt(flags.priority) : 2
+            });
+            console.log(`✅ Created pipeline item #${newId}: ${title}`);
+            if (flags.parent) {
+              console.log(`   Linked to parent #${flags.parent}`);
+            }
+          }
           break;
         case 'move':
           pipelineMove(parseInt(args[2]), args[3], { 
