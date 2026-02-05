@@ -43,11 +43,6 @@ try {
 } catch (e) {
     console.warn('sqlite-vec not available:', e.message);
 }
-try {
-    sqliteVec = require('sqlite-vec');
-} catch (e) {
-    console.warn('sqlite-vec not available:', e.message);
-}
 
 // Constants from spec
 const MAX_CHUNK_SIZE = 500; // tokens (~2000 chars)
@@ -587,28 +582,6 @@ function computeFileHash(filepath) {
     return crypto.createHash('sha256').update(content).digest('hex');
 }
 
-async function generateEmbedding(text, retries = 3) {
-    if (!openai) {
-        throw new Error('OpenAI client not available');
-    }
-    
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const response = await openai.embeddings.create({
-                model: 'text-embedding-3-small',
-                input: text,
-                encoding_format: 'float',
-            });
-            return response.data[0].embedding;
-        } catch (error) {
-            if (attempt === retries) {
-                throw new Error(`Embedding generation failed after ${retries} attempts: ${error.message}`);
-            }
-            // Wait before retrying (exponential backoff)
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
-    }
-}
 
 async function processSessionFile(chunker, sessionId, filepath) {
     // Validate file
@@ -696,52 +669,6 @@ async function processSessionFile(chunker, sessionId, filepath) {
 }
 
 
-async function embedStatusCommand() {
-    try {
-        const Database = require('better-sqlite3');
-        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
-        
-        if (!fs.existsSync(dbPath)) {
-            console.log('No database found.');
-            return;
-        }
-        
-        const sqlite = new Database(dbPath);
-        
-        const totalChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks').get()?.count || 0;
-        const embeddedChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE embedding IS NOT NULL').get()?.count || 0;
-        const pendingChunks = totalChunks - embeddedChunks;
-        
-        // Check if vector table exists and has data
-        let vectorTableStats = null;
-        try {
-            vectorTableStats = sqlite.prepare('SELECT COUNT(*) as count FROM session_embeddings').get();
-        } catch (e) {
-            // Vector table doesn't exist or sqlite-vec not loaded
-        }
-        
-        sqlite.close();
-        
-        console.log('\n📊 Embedding Status');
-        console.log('==================');
-        console.log(`Total chunks: ${totalChunks}`);
-        console.log(`Embedded chunks: ${embeddedChunks}`);
-        console.log(`Pending chunks: ${pendingChunks}`);
-        
-        if (vectorTableStats) {
-            console.log(`Vector search entries: ${vectorTableStats.count}`);
-        } else {
-            console.log('Vector search: Not available (sqlite-vec not loaded)');
-        }
-        
-        const embeddedPercentage = totalChunks > 0 ? ((embeddedChunks / totalChunks) * 100).toFixed(1) : 0;
-        console.log(`Completion: ${embeddedPercentage}%`);
-        
-    } catch (error) {
-        console.error('Error getting embedding status:', error.message);
-        process.exit(1);
-    }
-}
 
 async function validateCommand(file) {
     const validation = SessionValidator.validateSessionFile(file);
