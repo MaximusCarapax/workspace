@@ -230,7 +230,7 @@ async function checkMentions(showAll = false) {
       try {
         db.logError({
           level: 'error',
-          source: 'x-mentions.js',
+          source: 'x-mentions',
           message: apiError.message,
           details: 'Failed to check mentions via both Bird CLI and X API',
           stack: apiError.stack
@@ -300,7 +300,7 @@ async function replyToMention(tweetId, text) {
     try {
       db.logError({
         level: 'error',
-        source: 'x-mentions.js',
+        source: 'x-mentions',
         message: e.message,
         details: `Failed to reply to mention ${tweetId}`,
         stack: e.stack
@@ -391,7 +391,7 @@ Strategy: Bird CLI (free) → X API fallback (100 reads/month)
     try {
       db.logError({
         level: 'error',
-        source: 'x-mentions.js',
+        source: 'x-mentions',
         message: error.message,
         details: `Command: ${command}`,
         stack: error.stack
