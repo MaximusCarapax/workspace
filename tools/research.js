@@ -374,7 +374,7 @@ async function main() {
   let forceDeepSeek = false;
   let urlFile = null;
   let searchQuery = null;
-  let cacheResult = false;
+  let cacheResult = true;  // Default: cache research findings
   let cacheTags = [];
   
   // Parse args
@@ -387,8 +387,8 @@ async function main() {
       forceDeepSeek = true;
     } else if (args[i] === '-s' || args[i] === '--search') {
       searchQuery = args[++i];
-    } else if (args[i] === '-c' || args[i] === '--cache') {
-      cacheResult = true;
+    } else if (args[i] === '--no-cache') {
+      cacheResult = false;
     } else if (args[i] === '--tags') {
       cacheTags = args[++i].split(',').map(t => t.trim());
     } else if (args[i] === '-h' || args[i] === '--help') {
@@ -400,15 +400,16 @@ Usage:
   node research.js -q "question" -f urls.txt
   node research.js --deepseek -q "question" url1
   node research.js -s 'search query' -q 'research question'
-  node research.js -q "question" url1 --cache --tags "ai,rag"
+  node research.js -q "question" url1 --tags "ai,rag"
+  node research.js -q "question" url1 --no-cache
 
 Options:
   -q, --question   Research question (required)
   -f, --file       File containing URLs (one per line)
   -d, --deepseek   Force DeepSeek (skip Gemini)
   -s, --search     Search query for Brave Search (optional)
-  -c, --cache      Save findings to Knowledge Cache
-  --tags           Comma-separated tags for cache (with --cache)
+  --no-cache       Skip saving to Knowledge Cache (default: cache enabled)
+  --tags           Comma-separated tags for cache
   -h, --help       Show this help
 
 The script fetches URLs, extracts content, and summarizes using:
