@@ -740,6 +740,21 @@ async function main() {
     }
   } catch (err) {
     console.error('❌ Error:', err.message);
+    
+    // Log error to database
+    try {
+      const db = require('../lib/db');
+      db.logError({
+        level: 'error',
+        source: 'linkedin.js',
+        message: err.message,
+        details: `Command: ${command}`,
+        stack: err.stack
+      });
+    } catch (dbError) {
+      console.error('Failed to log error to database:', dbError.message);
+    }
+    
     process.exit(1);
   }
 }

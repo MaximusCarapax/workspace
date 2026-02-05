@@ -394,6 +394,21 @@ Usage:
     }
   } catch (err) {
     console.error('Error:', err.message);
+    
+    // Log error to database
+    try {
+      const db = require('../lib/db');
+      db.logError({
+        level: 'error',
+        source: 'gmail.js',
+        message: err.message,
+        details: `Command: ${cmd}`,
+        stack: err.stack
+      });
+    } catch (dbError) {
+      console.error('Failed to log error to database:', dbError.message);
+    }
+    
     process.exit(1);
   }
 }

@@ -369,6 +369,22 @@ Free Tier Limits (2025):
 `);
     }
   } catch (e) {
+    console.error('❌ Error:', e.message);
+    
+    // Log error to database
+    try {
+      const db = require('../lib/db');
+      db.logError({
+        level: 'error',
+        source: 'x-post.js',
+        message: e.message,
+        details: `Command: ${command}`,
+        stack: e.stack
+      });
+    } catch (dbError) {
+      console.error('Failed to log error to database:', dbError.message);
+    }
+    
     process.exit(1);
   }
 }

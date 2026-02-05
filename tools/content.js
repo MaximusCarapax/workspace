@@ -431,6 +431,12 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       deleteContentItem(parseInt(id));
       console.log(`🗑️ Deleted item ${id}: "${truncate(item.title || item.content, 40)}"`);
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to delete content item from database',
+        stack: error.stack
+      });
       console.error(`❌ Failed to delete item: ${error.message}`);
       process.exit(1);
     }
@@ -513,13 +519,33 @@ Examples:
   }
 };
 
-// Run command
-if (!command || command === 'help' || command === '-h' || command === '--help') {
-  commands.help();
-} else if (commands[command]) {
-  commands[command]();
-} else {
-  console.log(`Unknown command: ${command}`);
-  console.log('Run "node content.js help" for usage');
+// Run command with error logging
+try {
+  if (!command || command === 'help' || command === '-h' || command === '--help') {
+    commands.help();
+  } else if (commands[command]) {
+    commands[command]();
+  } else {
+    console.log(`Unknown command: ${command}`);
+    console.log('Run "node content.js help" for usage');
+    process.exit(1);
+  }
+} catch (error) {
+  console.error(`❌ Error: ${error.message}`);
+  
+  // Log error to database
+  try {
+    const db = require('../lib/db');
+    db.logError({
+      level: 'error',
+      source: 'content.js',
+      message: error.message,
+      details: `Command: ${command}`,
+      stack: error.stack
+    });
+  } catch (dbError) {
+    console.error('Failed to log error to database:', dbError.message);
+  }
+  
   process.exit(1);
 }

@@ -314,40 +314,41 @@ async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
   
-  switch (command) {
-    case 'check': {
-      const showAll = args.includes('--all');
-      const result = await checkMentions(showAll);
-      console.log(JSON.stringify(result, null, 2));
-      break;
-    }
-    
-    case 'reply': {
-      const tweetId = args[1];
-      const text = args.slice(2).join(' ');
-      if (!tweetId || !text) {
-        console.error('Usage: x-mentions.js reply <tweet_id> "text"');
-        process.exit(1);
+  try {
+    switch (command) {
+      case 'check': {
+        const showAll = args.includes('--all');
+        const result = await checkMentions(showAll);
+        console.log(JSON.stringify(result, null, 2));
+        break;
       }
-      const result = await replyToMention(tweetId, text);
-      console.log(JSON.stringify(result, null, 2));
-      break;
-    }
-    
-    case 'history': {
-      const result = showHistory();
-      console.log(JSON.stringify(result, null, 2));
-      break;
-    }
-    
-    case 'clear': {
-      const result = clearSeen();
-      console.log(JSON.stringify(result, null, 2));
-      break;
-    }
-    
-    default:
-      console.log(`
+      
+      case 'reply': {
+        const tweetId = args[1];
+        const text = args.slice(2).join(' ');
+        if (!tweetId || !text) {
+          console.error('Usage: x-mentions.js reply <tweet_id> "text"');
+          process.exit(1);
+        }
+        const result = await replyToMention(tweetId, text);
+        console.log(JSON.stringify(result, null, 2));
+        break;
+      }
+      
+      case 'history': {
+        const result = showHistory();
+        console.log(JSON.stringify(result, null, 2));
+        break;
+      }
+      
+      case 'clear': {
+        const result = clearSeen();
+        console.log(JSON.stringify(result, null, 2));
+        break;
+      }
+      
+      default:
+        console.log(`
 X/Twitter Mentions Checker
 
 Usage:
@@ -359,6 +360,25 @@ Usage:
 
 Strategy: Bird CLI (free) → X API fallback (100 reads/month)
       `);
+    }
+  } catch (error) {
+    console.error('Error:', error.message);
+    
+    // Log error to database
+    try {
+      const db = require('../lib/db');
+      db.logError({
+        level: 'error',
+        source: 'x-mentions.js',
+        message: error.message,
+        details: `Command: ${command}`,
+        stack: error.stack
+      });
+    } catch (dbError) {
+      console.error('Failed to log error to database:', dbError.message);
+    }
+    
+    process.exit(1);
   }
 }
 
