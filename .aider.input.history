@@ -300,3 +300,54 @@
 +  node research.js -s 'domain registrar affiliate programs' -q 'What are the commission rates?'
 +
 +Keep the existing URL mode working too. The -s flag is optional - if not provided, URLs are required as before.
+
+# 2026-02-05 01:12:09.982734
++I need to fix 3 bugs in research.js:
+
+# 2026-02-05 01:13:14.524225
++I need to fix 3 bugs in tools/research.js:
+
+# 2026-02-05 01:13:35.105213
++Fix 3 bugs:
++
++1. REMOVE the auto-install try/catch block at the bottom of the file (lines ~470-480 with execSync). Just delete it entirely.
++
++2. Line ~142: Add clearTimeout(timeout) BEFORE res.destroy() when size limit is hit.
++
++3. Line ~225 area: In callGemini error handling, add check for auth errors (401/403 status) that should NOT trigger fallback - throw them directly as config errors.
+
+# 2026-02-05 01:13:35.105289
++Fix 3 bugs:
++
++1. REMOVE the auto-install try/catch block at the bottom of the file (lines ~470-480 with execSync). Just delete it entirely.
++
++2. Line ~142: Add clearTimeout(timeout) BEFORE res.destroy() when size limit is hit.
++
++3. Line ~225 area: In callGemini error handling, add check for auth errors (401/403 status) that should NOT trigger fallback - throw them directly as config errors.
+
+# 2026-02-05 01:13:57.782530
++**Bug #1 (CRITICAL): Auto-install execSync at the bottom** - Remove the entire try/catch block at the bottom that auto-installs dependencies. Dependencies should be in package.json, not auto-installed. Just let it fail with clear error if deps missing.
+
+# 2026-02-05 01:15:22.031551
++1. **Bug #1 (CRITICAL)**: Remove the auto-install execSync block at the end (lines 474-479). Dependencies should be in package.json, not auto-installed.
+
+# 2026-02-05 01:15:22.045282
++/run node tools/research.js -q "test" https://example.com
+
+# 2026-02-05 01:15:22.045322
++/run node tools/research.js -q "test" https://example.com
+
+# 2026-02-05 01:15:24.109963
++2. **Bug #2**: Add clearTimeout before res.destroy() around line 142 when data length > 500000
+
+# 2026-02-05 01:15:24.178516
++3. **Bug #3**: In callGemini function around line 225, add handling for auth errors (401/403) to NOT trigger fallback - they indicate config issues, not transient problems.
+
+# 2026-02-05 01:15:24.204053
++/run node tools/research.js -q "test question" https://example.com
+
+# 2026-02-05 01:15:24.204110
++/run node tools/research.js -q "test question" https://example.com
+
+# 2026-02-05 01:15:34.581221
++**Bug #2: Missing clearTimeout on res.destroy** - In the fetchUrl function around line 142, when res.destroy() is called due to size limit, clearTimeout isn't called. Add: clearTimeout(timeout) before res.destroy()

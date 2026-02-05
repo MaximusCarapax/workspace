@@ -125,6 +125,10 @@ Reactions are lightweight social signals. Humans use them constantly — they sa
 
 Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.
 
+## Alignment Checks
+
+After building new tools, personas, or making model changes, run through `docs/ALIGNMENT_CHECKLIST.md`. Quick verification that new work follows established patterns.
+
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
 **📝 Platform Formatting:**
