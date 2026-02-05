@@ -829,60 +829,117 @@ async function memoryBackfillEmbeddings() {
 // PIPELINE
 // ============================================================
 
-function pipelineBoard() {
-  const stages = ['idea', 'spec', 'spec-review', 'building', 'qa', 'final-review', 'review', 'blocked', 'done', 'live'];
-  const stageNames = {
-    'idea': '💡 IDEA',
-    'spec': '📋 SPEC',
-    'spec-review': '🔍 SPEC-REVIEW',
-    'building': '🔨 BUILDING',
-    'qa': '🧪 QA',
-    'final-review': '🎯 FINAL-REVIEW',
-    'review': '👀 REVIEW',
-    'blocked': '🚫 BLOCKED',
-    'done': '✅ DONE',
-    'live': '🟢 LIVE'
+function pipelineBoard(options = {}) {
+  const showType = options.type || null; // null = show both, 'feature' or 'story'
+  
+  const featureStages = ['idea', 'spec', 'spec-review', 'building', 'live'];
+  const storyStages = ['todo', 'in-progress', 'qa', 'done', 'blocked'];
+  
+  const stageEmojis = {
+    'idea': '💡',
+    'spec': '📋',
+    'spec-review': '🔍',
+    'building': '🔨',
+    'live': '🟢',
+    'todo': '📋',
+    'in-progress': '🔄',
+    'qa': '🧪',
+    'done': '✅',
+    'blocked': '🚫'
   };
   
-  console.log('\n📋 Pipeline Kanban Board\n');
+  console.log('\n📋 Pipeline Board\n');
   
-  for (const stage of stages) {
-    const items = db.db.prepare(`
-      SELECT p.*, 
-        (SELECT content FROM pipeline_notes WHERE pipeline_id = p.id ORDER BY created_at DESC LIMIT 1) as latest_note
-      FROM pipeline p
-      WHERE p.stage = ?
-      ORDER BY p.priority ASC, p.created_at DESC
-    `).all(stage);
+  // Show Features section
+  if (!showType || showType === 'feature') {
+    console.log('  ══════════════════════════════════════');
+    console.log('  📦 FEATURES');
+    console.log('  ══════════════════════════════════════\n');
     
-    console.log(`  ${stageNames[stage]} (${items.length})`);
-    if (items.length === 0) {
-      console.log(`    (empty)`);
-    } else {
-      for (const item of items) {
-        const assigned = item.assigned_to ? ` [${item.assigned_to}]` : '';
-        console.log(`    #${item.id}${assigned}: ${item.title}`);
-        if (item.latest_note) {
-          const note = item.latest_note.length > 40 ? item.latest_note.substring(0, 40) + '...' : item.latest_note;
-          console.log(`        📝 ${note}`);
+    for (const stage of featureStages) {
+      const items = db.db.prepare(`
+        SELECT p.* FROM pipeline p
+        WHERE (p.type = 'feature' OR p.type IS NULL) 
+          AND p.stage = ?
+        ORDER BY p.priority ASC, p.created_at DESC
+      `).all(stage);
+      
+      const emoji = stageEmojis[stage] || '📌';
+      console.log(`  ${emoji} ${stage.toUpperCase()} (${items.length})`);
+      
+      if (items.length === 0) {
+        console.log(`    (empty)`);
+      } else {
+        for (const item of items) {
+          const stats = db.getStoryStats(item.id);
+          const storyInfo = stats.total > 0 ? ` (${stats.done}/${stats.total} stories)` : '';
+          const assigned = item.assigned_to ? ` [${item.assigned_to}]` : '';
+          console.log(`    #${item.id}${assigned}: ${item.title}${storyInfo}`);
         }
       }
+      console.log('');
     }
-    console.log('');
+  }
+  
+  // Show Stories section
+  if (!showType || showType === 'story') {
+    console.log('  ══════════════════════════════════════');
+    console.log('  📋 STORIES');
+    console.log('  ══════════════════════════════════════\n');
+    
+    for (const stage of storyStages) {
+      const items = db.db.prepare(`
+        SELECT p.*, parent.title as parent_title FROM pipeline p
+        LEFT JOIN pipeline parent ON p.parent_id = parent.id
+        WHERE p.type = 'story' AND p.stage = ?
+        ORDER BY p.priority ASC, p.created_at DESC
+      `).all(stage);
+      
+      const emoji = stageEmojis[stage] || '📌';
+      console.log(`  ${emoji} ${stage.toUpperCase()} (${items.length})`);
+      
+      if (items.length === 0) {
+        console.log(`    (empty)`);
+      } else {
+        for (const item of items) {
+          const parentInfo = item.parent_id ? ` → #${item.parent_id}` : '';
+          const assigned = item.assigned_to ? ` [${item.assigned_to}]` : '';
+          console.log(`    #${item.id}${assigned}: ${item.title}${parentInfo}`);
+        }
+      }
+      console.log('');
+    }
   }
 }
 
 function pipelineList(options = {}) {
   const stage = options.stage || null;
   const parentId = options.parent !== undefined ? (options.parent === 'none' ? null : parseInt(options.parent)) : undefined;
+  const itemType = options.type || null;
   let sql = `SELECT * FROM pipeline WHERE 1=1`;
   const params = [];
+  
+  if (itemType) {
+    if (itemType === 'feature') {
+      sql += ` AND (type = 'feature' OR type IS NULL)`;
+    } else {
+      sql += ` AND type = ?`;
+      params.push(itemType);
+    }
+  }
   
   if (stage) {
     sql += ` AND stage = ?`;
     params.push(stage);
   } else {
-    sql += ` AND stage NOT IN ('done', 'live')`;
+    // Don't filter by completion stage - show all active items for the type
+    if (itemType === 'story') {
+      sql += ` AND stage NOT IN ('done')`;
+    } else if (itemType === 'feature') {
+      sql += ` AND stage NOT IN ('live')`;
+    } else {
+      sql += ` AND stage NOT IN ('done', 'live')`;
+    }
   }
   
   if (parentId !== undefined) {
@@ -904,6 +961,7 @@ function pipelineList(options = {}) {
   }
   
   let filterDesc = '';
+  if (itemType) filterDesc += ` (type: ${itemType})`;
   if (stage) filterDesc += ` (stage: ${stage})`;
   if (parentId !== undefined) filterDesc += parentId === null ? ' (top-level only)' : ` (parent: #${parentId})`;
   
@@ -911,6 +969,7 @@ function pipelineList(options = {}) {
   for (const item of items) {
     const assigned = item.assigned_to ? ` [${item.assigned_to}]` : '';
     const parentInfo = item.parent_id ? ` ← #${item.parent_id}` : '';
+    const typeInfo = item.type === 'story' ? ' [story]' : '';
     const stageEmoji = {
       'idea': '💡',
       'spec': '📋',
@@ -921,9 +980,11 @@ function pipelineList(options = {}) {
       'review': '👀',
       'blocked': '🚫',
       'done': '✅',
-      'live': '🟢'
+      'live': '🟢',
+      'todo': '📋',
+      'in-progress': '🔄'
     }[item.stage] || '📌';
-    console.log(`  ${stageEmoji} #${item.id}${assigned}${parentInfo}: ${item.title}`);
+    console.log(`  ${stageEmoji} #${item.id}${assigned}${typeInfo}${parentInfo}: ${item.title}`);
     console.log(`      Stage: ${item.stage} | Priority: ${item.priority} | Created: ${formatDate(item.created_at)}`);
   }
   console.log('');
@@ -935,6 +996,8 @@ function pipelineShow(id, options = {}) {
     console.log(`Pipeline item #${id} not found.`);
     return;
   }
+  
+  const itemType = item.type || 'feature';
   
   const notes = db.db.prepare(`
     SELECT * FROM pipeline_notes 
@@ -954,15 +1017,17 @@ function pipelineShow(id, options = {}) {
     parentInfo = db.db.prepare(`SELECT id, title, stage FROM pipeline WHERE id = ?`).get(item.parent_id);
   }
   
-  // Get children if requested or always show count
+  // Get children/stories if this is a feature
   const children = db.db.prepare(`
     SELECT * FROM pipeline 
     WHERE parent_id = ? 
     ORDER BY priority ASC, created_at DESC
   `).all(id);
   
-  console.log(`\n📋 Pipeline Item #${id}\n`);
+  const typeEmoji = itemType === 'story' ? '📋' : '📦';
+  console.log(`\n${typeEmoji} ${itemType.charAt(0).toUpperCase() + itemType.slice(1)} #${id}\n`);
   console.log(`  Title: ${item.title}`);
+  console.log(`  Type: ${itemType}`);
   console.log(`  Stage: ${item.stage}`);
   console.log(`  Priority: ${item.priority}`);
   if (item.assigned_to) console.log(`  Assigned to: ${item.assigned_to}`);
@@ -974,26 +1039,73 @@ function pipelineShow(id, options = {}) {
   console.log(`  Created: ${formatDate(item.created_at)}`);
   console.log(`  Updated: ${formatDate(item.updated_at)}`);
   
-  // Show children section
-  if (options.children || children.length > 0) {
-    console.log(`\n  👶 Child Items (${children.length}):`);
-    if (children.length === 0) {
-      console.log(`    No child items.`);
-    } else {
-      for (const child of children) {
+  // For features, show story rollup
+  if (itemType === 'feature') {
+    const stories = children.filter(c => c.type === 'story');
+    if (stories.length > 0 || options.children) {
+      const stats = db.getStoryStats(id);
+      const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+      
+      console.log(`\n  📊 Story Progress: ${stats.done}/${stats.total} done (${pct}%)`);
+      console.log(`\n  📋 Stories:`);
+      
+      if (stories.length === 0) {
+        console.log(`    No stories yet.`);
+      } else {
+        for (const story of stories) {
+          const stageEmoji = {
+            'todo': '📋',
+            'in-progress': '🔄',
+            'qa': '🧪',
+            'done': '✅',
+            'blocked': '🚫'
+          }[story.stage] || '📌';
+          const assigned = story.assigned_to ? ` [${story.assigned_to}]` : '';
+          console.log(`    ${stageEmoji} #${story.id}${assigned}: ${story.title} [${story.stage}]`);
+        }
+      }
+    }
+    
+    // Show non-story children separately if any
+    const otherChildren = children.filter(c => c.type !== 'story');
+    if (otherChildren.length > 0) {
+      console.log(`\n  👶 Other Child Items (${otherChildren.length}):`);
+      for (const child of otherChildren) {
         const stageEmoji = {
           'idea': '💡',
           'spec': '📋',
           'spec-review': '🔍',
           'building': '🔨',
           'qa': '🧪',
-          'final-review': '🎯',
-          'review': '👀',
-          'blocked': '🚫',
           'done': '✅',
-          'live': '🟢'
+          'live': '🟢',
+          'blocked': '🚫'
         }[child.stage] || '📌';
         console.log(`    ${stageEmoji} #${child.id}: ${child.title} (${child.stage})`);
+      }
+    }
+  } else {
+    // For stories or other types, show children normally if any
+    if (options.children || children.length > 0) {
+      console.log(`\n  👶 Child Items (${children.length}):`);
+      if (children.length === 0) {
+        console.log(`    No child items.`);
+      } else {
+        for (const child of children) {
+          const stageEmoji = {
+            'idea': '💡',
+            'spec': '📋',
+            'spec-review': '🔍',
+            'building': '🔨',
+            'qa': '🧪',
+            'done': '✅',
+            'live': '🟢',
+            'blocked': '🚫',
+            'todo': '📋',
+            'in-progress': '🔄'
+          }[child.stage] || '📌';
+          console.log(`    ${stageEmoji} #${child.id}: ${child.title} (${child.stage})`);
+        }
       }
     }
   }
@@ -1036,23 +1148,32 @@ function pipelineMove(id, stage, options = {}) {
     return;
   }
   
-  const validStages = ['idea', 'spec', 'spec-review', 'building', 'qa', 'final-review', 'review', 'blocked', 'done', 'live'];
-  if (!validStages.includes(stage)) {
-    console.log(`Invalid stage. Must be one of: ${validStages.join(', ')}`);
+  const itemType = item.type || 'feature';
+  const validStages = db.PIPELINE_STAGES[itemType];
+  
+  if (!validStages || !validStages.includes(stage)) {
+    console.log(`❌ Invalid stage '${stage}' for ${itemType}.`);
+    console.log(`   Valid stages for ${itemType}: ${validStages ? validStages.join(', ') : 'unknown'}`);
     return;
   }
   
   const updates = { stage };
-  if (stage === 'building' && !item.started_at) {
+  // Set started_at for building (features) or in-progress (stories)
+  if ((stage === 'building' || stage === 'in-progress') && !item.started_at) {
     updates.started_at = new Date().toISOString();
   }
+  // Set completed_at for done/live
   if ((stage === 'done' || stage === 'live') && !item.completed_at) {
     updates.completed_at = new Date().toISOString();
   }
   
-  db.updatePipeline(id, updates, options.source || 'main');
-  
-  console.log(`✅ Moved pipeline #${id} to stage: ${stage}`);
+  try {
+    db.updatePipeline(id, updates, options.source || 'main');
+    console.log(`✅ Moved ${itemType} #${id} to stage: ${stage}`);
+  } catch (err) {
+    console.log(`❌ Failed to move: ${err.message}`);
+    return;
+  }
   
   // Add note if provided
   if (options.note) {
@@ -1252,20 +1373,24 @@ HEALTH
   health                                 Integration status
 
 PIPELINE
-  pipeline board                         Kanban view grouped by stage (includes LIVE)
-  pipeline list [--stage <stage>] [--parent <id>]
+  pipeline board [--type feature|story]  Kanban view (features + stories)
+  pipeline list [--type feature|story] [--stage <stage>] [--parent <id>]
                                          List pipeline items with filters
-  pipeline show <id> [--children]        Show full pipeline item with notes
-  pipeline create "Title" [--parent <id>] [--priority 1-4]
-                                         Create new pipeline item (optionally linked)
+  pipeline show <id>                     Show full item with notes and story rollup
+  pipeline create "Title" [--type feature|story] [--parent <id>] [--priority 1-4]
+                                         Create new item (stories link to features)
   pipeline move <id> <stage> [--note "reason"] [--source main|subagent]
                                          Move item to new stage, optionally add note
-                                         Stages: idea, spec, spec-review, building, qa,
-                                                 final-review, review, blocked, done, live
   pipeline note <id> "content" [--type progress|blocker|decision]
                                          Add note to pipeline item
   pipeline assign <id> <agent-session-key>
                                          Assign item to an agent
+
+  Item Types:
+    feature — Product features (default)
+      Stages: idea → spec → spec-review → building → live
+    story — Implementation tasks linked to features
+      Stages: todo → in-progress → qa → done (+ blocked)
 
 MEMORY
   memory add "content" --category fact   Add memory
@@ -1503,12 +1628,13 @@ try {
     case 'pipeline':
       switch (subcommand) {
         case 'board':
-          pipelineBoard();
+          pipelineBoard({ type: flags.type || null });
           break;
         case 'list':
           pipelineList({ 
             stage: flags.stage || null,
-            parent: flags.parent
+            parent: flags.parent,
+            type: flags.type || null
           });
           break;
         case 'show':
@@ -1520,15 +1646,23 @@ try {
           {
             const title = args[2];
             if (!title) {
-              console.log('Usage: pipeline create "Title" [--parent <id>] [--priority 1-4]');
+              console.log('Usage: pipeline create "Title" [--type feature|story] [--parent <id>] [--priority 1-4]');
+              break;
+            }
+            const itemType = flags.type || 'feature';
+            if (!['feature', 'story'].includes(itemType)) {
+              console.log('Invalid type. Must be "feature" or "story".');
               break;
             }
             const newId = db.createPipeline({
               title,
+              type: itemType,
               parentId: flags.parent ? parseInt(flags.parent) : null,
               priority: flags.priority ? parseInt(flags.priority) : 2
             });
-            console.log(`✅ Created pipeline item #${newId}: ${title}`);
+            const defaultStage = db.getDefaultStage(itemType);
+            console.log(`✅ Created ${itemType} #${newId}: ${title}`);
+            console.log(`   Stage: ${defaultStage}`);
             if (flags.parent) {
               console.log(`   Linked to parent #${flags.parent}`);
             }
