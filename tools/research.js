@@ -122,7 +122,8 @@ async function fetchUrl(url) {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         clearTimeout(timeout);
         const newUrl = new URL(res.headers.location, url).href;
-        resolve(fetchUrl(newUrl));
+        // Don't resolve with a promise - fetch the new URL and resolve with its result
+        fetchUrl(newUrl).then(resolve).catch(() => resolve({ url, error: 'Redirect failed' }));
         return;
       }
       
@@ -239,6 +240,29 @@ async function callGemini(prompt) {
               reject(new Error(errorMessage));
             }
           } else if (json.choices && json.choices[0]) {
+            // Log token usage
+            const usage = json.usage;
+            if (usage) {
+              try {
+                const db = require('../lib/db');
+                // Calculate cost: Gemini 2.5 Flash Lite pricing via OpenRouter
+                const costPerMillionInput = 0.10;
+                const costPerMillionOutput = 0.40;
+                const cost = (usage.prompt_tokens * costPerMillionInput + usage.completion_tokens * costPerMillionOutput) / 1000000;
+                
+                db.logUsage({
+                  model: 'google/gemini-2.5-flash-lite',
+                  provider: 'openrouter',
+                  tokensIn: usage.prompt_tokens || 0,
+                  tokensOut: usage.completion_tokens || 0,
+                  costUsd: cost,
+                  taskType: 'research',
+                  source: 'research.js'
+                });
+              } catch (e) {
+                // Silently fail if logging fails
+              }
+            }
             resolve(json.choices[0].message.content);
           } else {
             reject(new Error('No response from Gemini via OpenRouter'));
@@ -280,7 +304,34 @@ async function callDeepSeek(prompt) {
         try {
           const json = JSON.parse(data);
           if (json.error) reject(new Error(json.error.message));
-          else resolve(json.choices[0].message.content);
+          else {
+            // Log token usage
+            const usage = json.usage;
+            if (usage) {
+              try {
+                const db = require('../lib/db');
+                // Use correct pricing from tools/deepseek.js
+                const PRICING = {
+                  'deepseek-chat': { in: 0.27, out: 1.10 }
+                };
+                const pricing = PRICING['deepseek-chat'];
+                const cost = (usage.prompt_tokens * pricing.in + usage.completion_tokens * pricing.out) / 1000000;
+                
+                db.logUsage({
+                  model: 'deepseek-chat',
+                  provider: 'deepseek',
+                  tokensIn: usage.prompt_tokens || 0,
+                  tokensOut: usage.completion_tokens || 0,
+                  costUsd: cost,
+                  taskType: 'research',
+                  source: 'research.js'
+                });
+              } catch (e) {
+                // Silently fail if logging fails
+              }
+            }
+            resolve(json.choices[0].message.content);
+          }
         } catch(e) { reject(e); }
       });
     });
