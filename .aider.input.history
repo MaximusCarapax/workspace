@@ -545,3 +545,99 @@
 +{type: 'file', file: {filename: 'doc.pdf', file_data: 'data:application/pdf;base64,...'}}
 +
 +Keep it clean and simple - PDF-only extraction.
+
+# 2026-02-05 07:41:57.516135
++Implement Dev Pipeline V2 Phase 1 changes:
++
++## lib/db.js changes:
++
++1. Add migration in runMigrations() to add columns to pipeline table:
++   - assigned_to TEXT
++   - started_at TEXT
++   - completed_at TEXT
++   Also update the stage CHECK constraint to include 'building' and 'blocked' stages (add them alongside existing stages).
++
++2. Update updatePipeline() function to:
++   - Accept an optional 'source' parameter in the options
++   - BEFORE updating, fetch the old pipeline record to get the previous stage
++   - AFTER successful update where stage changed, call logActivity() with:
++     - action: 'pipeline_stage_changed'
++     - category: 'pipeline'
++     - description: 'Pipeline #${id} moved from ${oldStage} to ${newStage}'
++     - source: passed source or 'main'
++     - relatedId: 'pipeline:${id}'
++     - metadata: { from: oldStage, to: newStage, title: pipeline.title }
++
++3. Update the note_type CHECK constraint in pipeline_notes to include: 'started', 'progress', 'blocker', 'complete', 'decision' (in addition to existing types)
++
++## tools/db.js changes:
++
++Add a 'pipeline' command with these subcommands:
++
++1. pipeline board - Kanban view showing items grouped by stage:
++   - Show stages in order: IDEA, SPEC, BUILDING, REVIEW, BLOCKED, DONE
++   - For each stage show count and items
++   - Show assigned_to if set
++   - Show most recent note for each item (truncated)
++
++2. pipeline list [--stage <stage>] - List pipeline items with optional stage filter
++
++3. pipeline show <id> - Show full pipeline item with all notes history
++
++4. pipeline move <id> <stage> [--note "reason"] [--source main|subagent] - Move item to new stage, optionally add note
++
++5. pipeline note <id> "content" [--type progress|blocker|decision] - Add note to pipeline item
++
++6. pipeline assign <id> <agent-session-key> - Assign item to an agent
++
++Add these to the help text under a PIPELINE section.
++
++The stages are: idea, spec, building, review, blocked, done
+
+# 2026-02-05 07:41:57.516217
++Implement Dev Pipeline V2 Phase 1 changes:
++
++## lib/db.js changes:
++
++1. Add migration in runMigrations() to add columns to pipeline table:
++   - assigned_to TEXT
++   - started_at TEXT
++   - completed_at TEXT
++   Also update the stage CHECK constraint to include 'building' and 'blocked' stages (add them alongside existing stages).
++
++2. Update updatePipeline() function to:
++   - Accept an optional 'source' parameter in the options
++   - BEFORE updating, fetch the old pipeline record to get the previous stage
++   - AFTER successful update where stage changed, call logActivity() with:
++     - action: 'pipeline_stage_changed'
++     - category: 'pipeline'
++     - description: 'Pipeline #${id} moved from ${oldStage} to ${newStage}'
++     - source: passed source or 'main'
++     - relatedId: 'pipeline:${id}'
++     - metadata: { from: oldStage, to: newStage, title: pipeline.title }
++
++3. Update the note_type CHECK constraint in pipeline_notes to include: 'started', 'progress', 'blocker', 'complete', 'decision' (in addition to existing types)
++
++## tools/db.js changes:
++
++Add a 'pipeline' command with these subcommands:
++
++1. pipeline board - Kanban view showing items grouped by stage:
++   - Show stages in order: IDEA, SPEC, BUILDING, REVIEW, BLOCKED, DONE
++   - For each stage show count and items
++   - Show assigned_to if set
++   - Show most recent note for each item (truncated)
++
++2. pipeline list [--stage <stage>] - List pipeline items with optional stage filter
++
++3. pipeline show <id> - Show full pipeline item with all notes history
++
++4. pipeline move <id> <stage> [--note "reason"] [--source main|subagent] - Move item to new stage, optionally add note
++
++5. pipeline note <id> "content" [--type progress|blocker|decision] - Add note to pipeline item
++
++6. pipeline assign <id> <agent-session-key> - Assign item to an agent
++
++Add these to the help text under a PIPELINE section.
++
++The stages are: idea, spec, building, review, blocked, done
