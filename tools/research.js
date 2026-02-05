@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Research helper - fetches URLs and summarizes using Gemini (free) or DeepSeek (cheap)
+ * Research helper - fetches URLs and summarizes using Gemini via OpenRouter or DeepSeek
  * 
  * Usage:
  *   node tools/research.js -q "question" url1 url2 url3
@@ -9,10 +9,11 @@
  * 
  * The script:
  * 1. Fetches each URL (with content limits)
- * 2. Sends all content to Gemini/DeepSeek with the research question
+ * 2. Sends all content to Gemini (via OpenRouter) or DeepSeek with the research question
  * 3. Returns a structured summary
  * 
  * Token-efficient: Opus plans, cheap models fetch & summarize
+ * Cost: Gemini ~$0.10/M via OpenRouter, DeepSeek ~$0.27/M
  */
 
 const https = require('https');
@@ -25,12 +26,23 @@ const { Readability } = require('@mozilla/readability');
 // Load .env
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-// API Keys (from environment)
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
+// API Keys (from environment or secrets file)
+let OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY;
 
-if (!GEMINI_KEY && !DEEPSEEK_KEY) {
-  console.error('Error: No API keys found. Set GEMINI_API_KEY or DEEPSEEK_API_KEY in .env');
+// Try loading OpenRouter key from secrets file if not in env
+if (!OPENROUTER_KEY) {
+  try {
+    const secretsPath = path.join(process.env.HOME, '.openclaw/secrets/openrouter.json');
+    if (fs.existsSync(secretsPath)) {
+      const secrets = JSON.parse(fs.readFileSync(secretsPath));
+      OPENROUTER_KEY = secrets.apiKey || secrets.OPENROUTER_API_KEY;
+    }
+  } catch (e) {}
+}
+
+if (!OPENROUTER_KEY && !DEEPSEEK_KEY) {
+  console.error('Error: No API keys found. Set OPENROUTER_API_KEY or DEEPSEEK_API_KEY in .env');
   process.exit(1);
 }
 
@@ -119,19 +131,29 @@ function extractContent(html, url) {
   return { title: 'Untitled', content: text };
 }
 
-// Call Gemini
+// Call Gemini via OpenRouter (avoids rate limits)
 async function callGemini(prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 2048 }
+      model: 'google/gemini-2.0-flash-001',
+      messages: [
+        { role: 'system', content: 'You are a research assistant. Analyze the provided sources and answer the question. Be thorough but concise. Cite sources when making claims.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2048
     });
 
     const req = https.request({
-      hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      hostname: 'openrouter.ai',
+      path: '/api/v1/chat/completions',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_KEY}`,
+        'HTTP-Referer': 'https://openclaw.ai',
+        'X-Title': 'OpenClaw Research'
+      }
     }, res => {
       let data = '';
       res.on('data', c => data += c);
@@ -139,16 +161,16 @@ async function callGemini(prompt) {
         try {
           const json = JSON.parse(data);
           if (json.error) {
-            // Check if it's a quota error
-            if (json.error.code === 429 || json.error.message?.includes('quota')) {
+            // Check if it's a quota/rate error
+            if (json.error.code === 429 || json.error.message?.includes('quota') || json.error.message?.includes('rate')) {
               reject(new Error('QUOTA_EXCEEDED'));
             } else {
-              reject(new Error(json.error.message));
+              reject(new Error(json.error.message || JSON.stringify(json.error)));
             }
-          } else if (json.candidates && json.candidates[0]) {
-            resolve(json.candidates[0].content.parts[0].text);
+          } else if (json.choices && json.choices[0]) {
+            resolve(json.choices[0].message.content);
           } else {
-            reject(new Error('No response from Gemini'));
+            reject(new Error('No response from Gemini via OpenRouter'));
           }
         } catch(e) { reject(e); }
       });
@@ -230,8 +252,8 @@ Options:
   -h, --help       Show this help
 
 The script fetches URLs, extracts content, and summarizes using:
-1. Gemini (free) - primary
-2. DeepSeek (cheap) - fallback if Gemini quota exceeded
+1. Gemini via OpenRouter (~$0.10/M) - primary, no rate limits
+2. DeepSeek (~$0.27/M) - fallback
 
 Max ${MAX_CHARS_PER_PAGE} chars per page, ${MAX_TOTAL_CHARS} total.
 `);
