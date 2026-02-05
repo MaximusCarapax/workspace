@@ -1275,6 +1275,57 @@ async function embedCommand(options) {
 }
 
 /**
+ * Generate query variations using Gemini for multi-query retrieval
+ * @param {string} query - Original search query
+ * @returns {Promise<string[]>} - Array of query variations including original
+ */
+async function generateQueryVariations(query) {
+    if (!OPENROUTER_KEY) {
+        return [query];
+    }
+    
+    try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENROUTER_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'google/gemini-2.0-flash-001',
+                messages: [{
+                    role: 'user',
+                    content: `Generate 3 alternative phrasings for this search query. Return ONLY the variations, one per line, no numbering or explanation.
+
+Original query: "${query}"
+
+Variations:`
+                }],
+                max_tokens: 150,
+                temperature: 0.7
+            })
+        });
+        
+        if (!response.ok) {
+            return [query];
+        }
+        
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        
+        const variations = content.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0 && line.length < 200);
+        
+        // Return original + variations
+        return [query, ...variations.slice(0, 3)];
+    } catch (e) {
+        console.warn('Query expansion failed:', e.message);
+        return [query];
+    }
+}
+
+/**
  * Rerank results using Cohere Rerank API
  * @param {string} query - The search query
  * @param {Array} results - Array of result objects with .content
@@ -1355,10 +1406,23 @@ async function searchCommand(query, options) {
             process.exit(1);
         }
         
-        // Generate embedding for the query
+        // Generate embedding for the query (with optional expansion)
         const embeddingGenerator = new EmbeddingGenerator();
-        console.log(`🔍 Searching for: "${query}"`);
-        const queryEmbedding = await embeddingGenerator.generateEmbedding(query);
+        
+        let queries = [query];
+        if (options.expand) {
+            console.log('🔄 Expanding query...');
+            queries = await generateQueryVariations(query);
+            if (queries.length > 1) {
+                console.log(`   Generated ${queries.length - 1} variations`);
+            }
+        }
+        
+        console.log(`🔍 Searching for: "${query}"${queries.length > 1 ? ` (+${queries.length - 1} variations)` : ''}`);
+        
+        // Generate embeddings for all queries
+        const queryEmbeddings = await Promise.all(queries.map(q => embeddingGenerator.generateEmbedding(q)));
+        const queryEmbedding = queryEmbeddings[0]; // Primary for single-query path
         
         // Build base filter conditions
         let filterConditions = [];
@@ -1428,10 +1492,13 @@ async function searchCommand(query, options) {
             return;
         }
         
-        // Calculate cosine similarity for each chunk
+        // Calculate cosine similarity for each chunk (max across all query embeddings)
         const embeddingResults = allChunks.map(chunk => {
             const embedding = embeddingGenerator.bufferToEmbedding(chunk.embedding);
-            const similarity = cosineSimilarity(queryEmbedding, embedding);
+            
+            // If we have multiple queries, take max similarity across all
+            const similarities = queryEmbeddings.map(qEmb => cosineSimilarity(qEmb, embedding));
+            const similarity = Math.max(...similarities);
             
             return {
                 ...chunk,
@@ -1876,6 +1943,7 @@ program
     .option('--topic <tag>', 'Filter by topic tag')
     .option('--limit <n>', 'Limit number of results (default: 5)')
     .option('--no-rerank', 'Skip Cohere reranking')
+    .option('--expand', 'Expand query with variations for better recall')
     .action(searchCommand);
 
 if (require.main === module) {

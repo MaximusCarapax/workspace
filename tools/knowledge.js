@@ -31,6 +31,7 @@ program
   .option('--source-type <type>', 'Source type (manual, research, web, conversation)', 'manual')
   .option('--source-url <url>', 'Source URL if from web')
   .option('--confidence <n>', 'Confidence score 0-1', parseFloat, 1.0)
+  .option('--importance <n>', 'Importance score 0-1 (higher = prioritized in search)', parseFloat, 0.5)
   .option('--expires <date>', 'Expiration date (ISO format)')
   .action(async (title, options) => {
     if (!options.summary) {
@@ -48,6 +49,7 @@ program
         sourceUrl: options.sourceUrl,
         tags,
         confidence: options.confidence,
+        importance: options.importance,
         expiresAt: options.expires
       });
       
@@ -158,6 +160,7 @@ program
       console.log(`Updated: ${entry.updated_at}`);
       console.log(`Verified: ${entry.verified ? 'Yes' : 'No'}`);
       console.log(`Confidence: ${entry.confidence}`);
+      console.log(`Importance: ${entry.importance || 0.5}`);
       if (entry.expires_at) console.log(`Expires: ${entry.expires_at}`);
       if (entry.topic_tags.length > 0) console.log(`Tags: ${entry.topic_tags.join(', ')}`);
       if (entry.superseded_by) console.log(`⚠️ Superseded by entry #${entry.superseded_by}`);
@@ -241,6 +244,7 @@ program
   .option('-s, --summary <text>', 'New summary')
   .option('-t, --tags <tags>', 'New comma-separated tags')
   .option('--confidence <n>', 'New confidence score', parseFloat)
+  .option('--importance <n>', 'New importance score', parseFloat)
   .option('--expires <date>', 'New expiration date')
   .action(async (id, options) => {
     try {
@@ -249,10 +253,11 @@ program
       if (options.summary) updates.summary = options.summary;
       if (options.tags) updates.tags = options.tags.split(',').map(t => t.trim());
       if (options.confidence !== undefined) updates.confidence = options.confidence;
+      if (options.importance !== undefined) updates.importance = options.importance;
       if (options.expires) updates.expiresAt = options.expires;
       
       if (Object.keys(updates).length === 0) {
-        console.error('No updates provided. Use --summary, --tags, --confidence, or --expires.');
+        console.error('No updates provided. Use --summary, --tags, --confidence, --importance, or --expires.');
         process.exit(1);
       }
       
