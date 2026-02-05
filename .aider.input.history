@@ -641,3 +641,179 @@
 +Add these to the help text under a PIPELINE section.
 +
 +The stages are: idea, spec, building, review, blocked, done
+
+# 2026-02-05 09:18:26.515322
++
++I need to implement Pipeline V3 with feature/story types. Here are the changes needed:
++
++## 1. lib/db.js Changes
++
++### Add migration for type column:
++Add a new migration in runMigrations() to add the 'type' column:
++```sql
++ALTER TABLE pipeline ADD COLUMN type TEXT DEFAULT 'feature';
++```
++
++### Add STAGES constant at module level:
++```javascript
++const PIPELINE_STAGES = {
++  feature: ['idea', 'spec', 'spec-review', 'building', 'live'],
++  story: ['todo', 'in-progress', 'qa', 'done', 'blocked']
++};
++```
++
++### Export the STAGES constant and add a validateStage helper:
++```javascript
++function validatePipelineStage(type, stage) {
++  const validStages = PIPELINE_STAGES[type];
++  if (!validStages) return false;
++  return validStages.includes(stage);
++}
++```
++
++### Update createPipeline to accept type parameter:
++Add 'type' to the function signature and INSERT statement. Default to 'feature'.
++Set default stage based on type: 'idea' for features, 'todo' for stories.
++
++### Update updatePipeline to validate stage based on item's type:
++Before updating, get the item's type and validate the new stage against PIPELINE_STAGES[type].
++If invalid, throw an error or return null with a message.
++
++### Update listPipeline to filter by type:
++Add 'type' parameter to the function. When provided, add 'AND type = ?' to the query.
++
++### Add getStoryStats helper for rollup:
++```javascript
++function getStoryStats(featureId) {
++  const stories = db.prepare(`
++    SELECT stage, COUNT(*) as count FROM pipeline 
++    WHERE parent_id = ? AND type = 'story'
++    GROUP BY stage
++  `).all(featureId);
++  
++  let total = 0, done = 0;
++  for (const s of stories) {
++    total += s.count;
++    if (s.stage === 'done') done += s.count;
++  }
++  return { total, done, byStage: stories };
++}
++```
++
++Export getStoryStats and PIPELINE_STAGES.
++
++## 2. tools/db.js Changes
++
++### Update pipelineBoard to show features and stories separately:
++Instead of showing all items by stage, show:
++1. FEATURES section - list all items where type='feature' or type IS NULL (backward compat), showing their stage and story progress rollup
++2. STORIES section - show items where type='story' grouped by stage (todo, in-progress, qa, done, blocked)
++
++For each feature, show progress like: '#25 Invoice Extractor (2/4 stories)' using getStoryStats
++
++### Update pipelineList to accept --type flag:
++Add 'type' to the options object and pass to listPipeline
++
++### Update pipeline create command:
++Accept --type flag (default 'feature'). Pass to createPipeline.
++
++### Update pipeline show command:
++For features (type='feature' or type IS NULL), show story rollup section:
++- Total stories count
++- Stories by stage with emoji status
++- Progress percentage
++
++### Update pipeline move command:
++Use validatePipelineStage before moving. Show error if stage invalid for the item's type.
++
++### Update showHelp:
++Document --type flag for create and list commands, document story stages.
++
+
+# 2026-02-05 09:18:26.515686
++
++I need to implement Pipeline V3 with feature/story types. Here are the changes needed:
++
++## 1. lib/db.js Changes
++
++### Add migration for type column:
++Add a new migration in runMigrations() to add the 'type' column:
++```sql
++ALTER TABLE pipeline ADD COLUMN type TEXT DEFAULT 'feature';
++```
++
++### Add STAGES constant at module level:
++```javascript
++const PIPELINE_STAGES = {
++  feature: ['idea', 'spec', 'spec-review', 'building', 'live'],
++  story: ['todo', 'in-progress', 'qa', 'done', 'blocked']
++};
++```
++
++### Export the STAGES constant and add a validateStage helper:
++```javascript
++function validatePipelineStage(type, stage) {
++  const validStages = PIPELINE_STAGES[type];
++  if (!validStages) return false;
++  return validStages.includes(stage);
++}
++```
++
++### Update createPipeline to accept type parameter:
++Add 'type' to the function signature and INSERT statement. Default to 'feature'.
++Set default stage based on type: 'idea' for features, 'todo' for stories.
++
++### Update updatePipeline to validate stage based on item's type:
++Before updating, get the item's type and validate the new stage against PIPELINE_STAGES[type].
++If invalid, throw an error or return null with a message.
++
++### Update listPipeline to filter by type:
++Add 'type' parameter to the function. When provided, add 'AND type = ?' to the query.
++
++### Add getStoryStats helper for rollup:
++```javascript
++function getStoryStats(featureId) {
++  const stories = db.prepare(`
++    SELECT stage, COUNT(*) as count FROM pipeline 
++    WHERE parent_id = ? AND type = 'story'
++    GROUP BY stage
++  `).all(featureId);
++  
++  let total = 0, done = 0;
++  for (const s of stories) {
++    total += s.count;
++    if (s.stage === 'done') done += s.count;
++  }
++  return { total, done, byStage: stories };
++}
++```
++
++Export getStoryStats and PIPELINE_STAGES.
++
++## 2. tools/db.js Changes
++
++### Update pipelineBoard to show features and stories separately:
++Instead of showing all items by stage, show:
++1. FEATURES section - list all items where type='feature' or type IS NULL (backward compat), showing their stage and story progress rollup
++2. STORIES section - show items where type='story' grouped by stage (todo, in-progress, qa, done, blocked)
++
++For each feature, show progress like: '#25 Invoice Extractor (2/4 stories)' using getStoryStats
++
++### Update pipelineList to accept --type flag:
++Add 'type' to the options object and pass to listPipeline
++
++### Update pipeline create command:
++Accept --type flag (default 'feature'). Pass to createPipeline.
++
++### Update pipeline show command:
++For features (type='feature' or type IS NULL), show story rollup section:
++- Total stories count
++- Stories by stage with emoji status
++- Progress percentage
++
++### Update pipeline move command:
++Use validatePipelineStage before moving. Show error if stage invalid for the item's type.
++
++### Update showHelp:
++Document --type flag for create and list commands, document story stages.
++

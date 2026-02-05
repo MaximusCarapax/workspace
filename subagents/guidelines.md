@@ -49,24 +49,49 @@ node tools/db.js activity add build "Completed PDF extractor" \
 ```
 
 ### Stage Flow & Roles
+
+**Features:**
 ```
-idea → spec → spec-review → building → qa → final-review → done → live
-        │         │            │        │        │
-      Opus    Spec-Reviewer  Builder   QA     Opus
+idea → spec → spec-review → building → final-review → live
+        │         │            │              │
+      Opus    Spec-Reviewer  Builder        Opus
+```
+
+**Stories:**
+```
+todo → in-progress → qa → done
+            │         │
+         Builder     QA
 ```
 
 | Stage | Who | Action |
 |-------|-----|--------|
 | idea | Opus | Create item, describe problem |
 | spec | Opus | Write spec doc with acceptance criteria |
-| spec-review | **Spec-Reviewer** | Check spec is buildable, criteria testable |
+| spec-review | **Spec-Reviewer** | Check spec is buildable, propose stories |
 | building | **Builder** | Implement per spec |
 | qa | **QA** | Test against acceptance criteria |
 | final-review | Opus | Final sign-off, security/quality check |
-| done | — | Complete, ready to ship |
-| live | — | In production |
+| done/live | — | Complete / in production |
 
 **Blocked** can happen at any stage — add reason in note.
+
+### RAID Tracking
+
+| Type | Stages | Who creates |
+|------|--------|-------------|
+| risk | identified → mitigating → resolved/accepted | Opus |
+| issue | identified → investigating → resolved | **Anyone** |
+| assumption | identified → validated/invalidated | Opus |
+| dependency | identified → waiting → resolved/blocked | Opus |
+
+**Rule for sub-agents:** If something's broken or blocking you, create an issue:
+```bash
+node tools/db.js pipeline create "LinkedIn login broken" --type issue
+node tools/db.js pipeline create "API timeout" --type issue --parent 25
+```
+
+For risks, assumptions, dependencies — just note it in your work. Opus will handle RAID.
 
 ---
 

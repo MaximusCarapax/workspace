@@ -830,22 +830,40 @@ async function memoryBackfillEmbeddings() {
 // ============================================================
 
 function pipelineBoard(options = {}) {
-  const showType = options.type || null; // null = show both, 'feature' or 'story'
+  const showType = options.type || null; // null = show all, 'feature', 'story', or 'raid'
   
-  const featureStages = ['idea', 'spec', 'spec-review', 'building', 'live'];
+  const featureStages = ['idea', 'spec', 'spec-review', 'building', 'final-review', 'live'];
   const storyStages = ['todo', 'in-progress', 'qa', 'done', 'blocked'];
+  const raidTypes = ['risk', 'issue', 'assumption', 'dependency'];
   
   const stageEmojis = {
     'idea': '💡',
     'spec': '📋',
     'spec-review': '🔍',
     'building': '🔨',
+    'final-review': '🎯',
     'live': '🟢',
     'todo': '📋',
     'in-progress': '🔄',
     'qa': '🧪',
     'done': '✅',
-    'blocked': '🚫'
+    'blocked': '🚫',
+    // RAID stages
+    'identified': '🆕',
+    'mitigating': '🛠️',
+    'investigating': '🔍',
+    'waiting': '⏳',
+    'resolved': '✅',
+    'accepted': '👍',
+    'validated': '✅',
+    'invalidated': '❌'
+  };
+  
+  const raidEmojis = {
+    'risk': '🔴',
+    'issue': '🟡',
+    'assumption': '🟣',
+    'dependency': '🔵'
   };
   
   console.log('\n📋 Pipeline Board\n');
@@ -903,11 +921,58 @@ function pipelineBoard(options = {}) {
       } else {
         for (const item of items) {
           const parentInfo = item.parent_id ? ` → #${item.parent_id}` : '';
-          const assigned = item.assigned_to ? ` [${item.assigned_to}]` : '';
-          console.log(`    #${item.id}${assigned}: ${item.title}${parentInfo}`);
+          console.log(`    #${item.id}: ${item.title}${parentInfo}`);
         }
       }
       console.log('');
+    }
+  }
+  
+  // Show RAID section
+  if (!showType || showType === 'raid') {
+    // Get all RAID items that aren't resolved/accepted/validated
+    const openRaidItems = db.db.prepare(`
+      SELECT p.*, parent.title as parent_title FROM pipeline p
+      LEFT JOIN pipeline parent ON p.parent_id = parent.id
+      WHERE p.type IN ('risk', 'issue', 'assumption', 'dependency')
+        AND p.stage NOT IN ('resolved', 'accepted', 'validated', 'invalidated')
+      ORDER BY p.priority ASC, p.type, p.created_at DESC
+    `).all();
+    
+    const closedRaidItems = db.db.prepare(`
+      SELECT p.*, parent.title as parent_title FROM pipeline p
+      LEFT JOIN pipeline parent ON p.parent_id = parent.id
+      WHERE p.type IN ('risk', 'issue', 'assumption', 'dependency')
+        AND p.stage IN ('resolved', 'accepted', 'validated', 'invalidated')
+      ORDER BY p.updated_at DESC
+      LIMIT 5
+    `).all();
+    
+    if (openRaidItems.length > 0 || showType === 'raid') {
+      console.log('  ══════════════════════════════════════');
+      console.log('  ⚠️ RAID');
+      console.log('  ══════════════════════════════════════\n');
+      
+      if (openRaidItems.length === 0) {
+        console.log('  (no open items)\n');
+      } else {
+        for (const item of openRaidItems) {
+          const typeEmoji = raidEmojis[item.type] || '⚠️';
+          const stageEmoji = stageEmojis[item.stage] || '📌';
+          const parentInfo = item.parent_id ? ` → #${item.parent_id}` : '';
+          console.log(`    ${typeEmoji} ${item.type}: ${item.title} (${item.stage})${parentInfo}`);
+        }
+        console.log('');
+      }
+      
+      if (closedRaidItems.length > 0) {
+        console.log('  Recently Closed:');
+        for (const item of closedRaidItems) {
+          const typeEmoji = raidEmojis[item.type] || '⚠️';
+          console.log(`    ${typeEmoji} ${item.title} [${item.stage}]`);
+        }
+        console.log('');
+      }
     }
   }
 }
@@ -1649,12 +1714,13 @@ try {
           {
             const title = args[2];
             if (!title) {
-              console.log('Usage: pipeline create "Title" [--type feature|story] [--parent <id>] [--priority 1-4] [--ac \'["criteria1","criteria2"]\']');
+              console.log('Usage: pipeline create "Title" [--type feature|story|risk|issue|assumption|dependency] [--parent <id>] [--priority 1-4] [--ac \'["criteria1","criteria2"]\']');
               break;
             }
             const itemType = flags.type || 'feature';
-            if (!['feature', 'story'].includes(itemType)) {
-              console.log('Invalid type. Must be "feature" or "story".');
+            const validTypes = ['feature', 'story', 'risk', 'issue', 'assumption', 'dependency'];
+            if (!validTypes.includes(itemType)) {
+              console.log('Invalid type. Must be one of: ' + validTypes.join(', '));
               break;
             }
             
