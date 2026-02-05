@@ -826,6 +826,229 @@ async function memoryBackfillEmbeddings() {
 }
 
 // ============================================================
+// PIPELINE
+// ============================================================
+
+function pipelineBoard() {
+  const stages = ['idea', 'spec', 'building', 'review', 'blocked', 'done'];
+  const stageNames = {
+    'idea': '💡 IDEA',
+    'spec': '📋 SPEC',
+    'building': '🔨 BUILDING',
+    'review': '👀 REVIEW',
+    'blocked': '🚫 BLOCKED',
+    'done': '✅ DONE'
+  };
+  
+  console.log('\n📋 Pipeline Kanban Board\n');
+  
+  for (const stage of stages) {
+    const items = db.db.prepare(`
+      SELECT p.*, 
+        (SELECT content FROM pipeline_notes WHERE pipeline_id = p.id ORDER BY created_at DESC LIMIT 1) as latest_note
+      FROM pipeline p
+      WHERE p.stage = ?
+      ORDER BY p.priority ASC, p.created_at DESC
+    `).all(stage);
+    
+    console.log(`  ${stageNames[stage]} (${items.length})`);
+    if (items.length === 0) {
+      console.log(`    (empty)`);
+    } else {
+      for (const item of items) {
+        const assigned = item.assigned_to ? ` [${item.assigned_to}]` : '';
+        console.log(`    #${item.id}${assigned}: ${item.title}`);
+        if (item.latest_note) {
+          const note = item.latest_note.length > 40 ? item.latest_note.substring(0, 40) + '...' : item.latest_note;
+          console.log(`        📝 ${note}`);
+        }
+      }
+    }
+    console.log('');
+  }
+}
+
+function pipelineList(options = {}) {
+  const stage = options.stage || null;
+  let sql = `SELECT * FROM pipeline WHERE 1=1`;
+  const params = [];
+  
+  if (stage) {
+    sql += ` AND stage = ?`;
+    params.push(stage);
+  } else {
+    sql += ` AND stage != 'done'`;
+  }
+  
+  sql += ` ORDER BY stage, priority ASC, created_at DESC`;
+  
+  const items = db.db.prepare(sql).all(...params);
+  
+  if (items.length === 0) {
+    console.log('No pipeline items found.');
+    return;
+  }
+  
+  console.log(`\n📋 Pipeline Items${stage ? ` (stage: ${stage})` : ''}\n`);
+  for (const item of items) {
+    const assigned = item.assigned_to ? ` [${item.assigned_to}]` : '';
+    const stageEmoji = {
+      'idea': '💡',
+      'spec': '📋',
+      'building': '🔨',
+      'review': '👀',
+      'blocked': '🚫',
+      'done': '✅'
+    }[item.stage] || '📌';
+    console.log(`  ${stageEmoji} #${item.id}${assigned}: ${item.title}`);
+    console.log(`      Stage: ${item.stage} | Priority: ${item.priority} | Created: ${formatDate(item.created_at)}`);
+  }
+  console.log('');
+}
+
+function pipelineShow(id) {
+  const item = db.db.prepare(`SELECT * FROM pipeline WHERE id = ?`).get(id);
+  if (!item) {
+    console.log(`Pipeline item #${id} not found.`);
+    return;
+  }
+  
+  const notes = db.db.prepare(`
+    SELECT * FROM pipeline_notes 
+    WHERE pipeline_id = ? 
+    ORDER BY created_at ASC
+  `).all(id);
+  
+  const tasks = db.db.prepare(`
+    SELECT * FROM pipeline_tasks 
+    WHERE pipeline_id = ? 
+    ORDER BY created_at ASC
+  `).all(id);
+  
+  console.log(`\n📋 Pipeline Item #${id}\n`);
+  console.log(`  Title: ${item.title}`);
+  console.log(`  Stage: ${item.stage}`);
+  console.log(`  Priority: ${item.priority}`);
+  if (item.assigned_to) console.log(`  Assigned to: ${item.assigned_to}`);
+  if (item.description) console.log(`  Description: ${item.description}`);
+  if (item.spec_doc) console.log(`  Spec: ${item.spec_doc}`);
+  if (item.acceptance_criteria) console.log(`  Acceptance: ${item.acceptance_criteria}`);
+  console.log(`  Created: ${formatDate(item.created_at)}`);
+  console.log(`  Updated: ${formatDate(item.updated_at)}`);
+  
+  console.log(`\n  📝 Notes (${notes.length}):`);
+  if (notes.length === 0) {
+    console.log(`    No notes yet.`);
+  } else {
+    for (const note of notes) {
+      const typeEmoji = {
+        'handover': '🔄',
+        'blocker': '🚫',
+        'question': '❓',
+        'decision': '✅',
+        'info': 'ℹ️',
+        'started': '🚀',
+        'progress': '📈',
+        'complete': '🏁'
+      }[note.note_type] || '📝';
+      console.log(`    ${typeEmoji} [${note.agent_role}] ${formatDate(note.created_at)}`);
+      console.log(`        ${note.content}`);
+    }
+  }
+  
+  console.log(`\n  ✅ Tasks (${tasks.length}):`);
+  if (tasks.length === 0) {
+    console.log(`    No tasks yet.`);
+  } else {
+    for (const task of tasks) {
+      const statusEmoji = {
+        'todo': '⬜',
+        'doing': '🔄',
+        'done': '✅',
+        'blocked': '🚫'
+      }[task.status] || '❓';
+      console.log(`    ${statusEmoji} ${task.title}`);
+      if (task.description) console.log(`        ${task.description}`);
+      if (task.assigned_to) console.log(`        Assigned: ${task.assigned_to}`);
+      if (task.completed_at) console.log(`        Completed: ${formatDate(task.completed_at)}`);
+    }
+  }
+  console.log('');
+}
+
+function pipelineMove(id, stage, options = {}) {
+  const item = db.db.prepare(`SELECT * FROM pipeline WHERE id = ?`).get(id);
+  if (!item) {
+    console.log(`Pipeline item #${id} not found.`);
+    return;
+  }
+  
+  const validStages = ['idea', 'spec', 'building', 'review', 'blocked', 'done'];
+  if (!validStages.includes(stage)) {
+    console.log(`Invalid stage. Must be one of: ${validStages.join(', ')}`);
+    return;
+  }
+  
+  const updates = { stage };
+  if (stage === 'building' && !item.started_at) {
+    updates.started_at = new Date().toISOString();
+  }
+  if (stage === 'done' && !item.completed_at) {
+    updates.completed_at = new Date().toISOString();
+  }
+  
+  db.updatePipeline(id, updates, options.source || 'main');
+  
+  console.log(`✅ Moved pipeline #${id} to stage: ${stage}`);
+  
+  // Add note if provided
+  if (options.note) {
+    db.addPipelineNote({
+      pipelineId: id,
+      agentRole: options.source || 'main',
+      noteType: 'progress',
+      content: options.note
+    });
+    console.log(`   Added note: ${options.note}`);
+  }
+}
+
+function pipelineNote(id, content, options = {}) {
+  const item = db.db.prepare(`SELECT * FROM pipeline WHERE id = ?`).get(id);
+  if (!item) {
+    console.log(`Pipeline item #${id} not found.`);
+    return;
+  }
+  
+  const noteType = options.type || 'info';
+  const validTypes = ['handover', 'blocker', 'question', 'decision', 'info', 'started', 'progress', 'complete'];
+  if (!validTypes.includes(noteType)) {
+    console.log(`Invalid note type. Must be one of: ${validTypes.join(', ')}`);
+    return;
+  }
+  
+  db.addPipelineNote({
+    pipelineId: id,
+    agentRole: options.source || 'main',
+    noteType: noteType,
+    content: content
+  });
+  
+  console.log(`✅ Added ${noteType} note to pipeline #${id}: ${content}`);
+}
+
+function pipelineAssign(id, agent) {
+  const item = db.db.prepare(`SELECT * FROM pipeline WHERE id = ?`).get(id);
+  if (!item) {
+    console.log(`Pipeline item #${id} not found.`);
+    return;
+  }
+  
+  db.updatePipeline(id, { assigned_to: agent }, 'main');
+  console.log(`✅ Assigned pipeline #${id} to ${agent}`);
+}
+
+// ============================================================
 // CONTACTS
 // ============================================================
 
@@ -980,6 +1203,17 @@ HEARTBEAT COSTS
 
 HEALTH
   health                                 Integration status
+
+PIPELINE
+  pipeline board                         Kanban view grouped by stage
+  pipeline list [--stage <stage>]        List pipeline items
+  pipeline show <id>                     Show full pipeline item with notes
+  pipeline move <id> <stage> [--note "reason"] [--source main|subagent]
+                                         Move item to new stage, optionally add note
+  pipeline note <id> "content" [--type progress|blocker|decision]
+                                         Add note to pipeline item
+  pipeline assign <id> <agent-session-key>
+                                         Assign item to an agent
 
 MEMORY
   memory add "content" --category fact   Add memory
@@ -1214,6 +1448,37 @@ try {
       }
       break;
     
+    case 'pipeline':
+      switch (subcommand) {
+        case 'board':
+          pipelineBoard();
+          break;
+        case 'list':
+          pipelineList({ stage: flags.stage || null });
+          break;
+        case 'show':
+          pipelineShow(parseInt(args[2]));
+          break;
+        case 'move':
+          pipelineMove(parseInt(args[2]), args[3], { 
+            note: flags.note || null,
+            source: flags.source || 'main'
+          });
+          break;
+        case 'note':
+          pipelineNote(parseInt(args[2]), args[3], { 
+            type: flags.type || 'info',
+            source: flags.source || 'main'
+          });
+          break;
+        case 'assign':
+          pipelineAssign(parseInt(args[2]), args[3]);
+          break;
+        default:
+          pipelineBoard();
+      }
+      break;
+      
     case 'contacts':
       switch (subcommand) {
         case 'list':
