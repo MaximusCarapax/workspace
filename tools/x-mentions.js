@@ -387,8 +387,6 @@ Strategy: Bird CLI (free) → X API fallback (100 reads/month)
       `);
     }
   } catch (error) {
-    console.error('Error:', error.message);
-    
     // Log error to database
     try {
       db.logError({
@@ -402,6 +400,7 @@ Strategy: Bird CLI (free) → X API fallback (100 reads/month)
       console.error('Failed to log error to database:', dbError.message);
     }
     
+    console.error('Error:', error.message);
     process.exit(1);
   }
 }

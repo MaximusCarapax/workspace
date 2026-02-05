@@ -172,11 +172,6 @@ async function postTweet(text, options = {}) {
       text: validated
     };
   } catch (e) {
-    console.error('❌ Failed to post:', e.message);
-    if (e.data) {
-      console.error('API Error:', JSON.stringify(e.data, null, 2));
-    }
-    
     // Log error to database
     try {
       db.logError({
@@ -188,6 +183,11 @@ async function postTweet(text, options = {}) {
       });
     } catch (dbError) {
       console.error('Failed to log error to database:', dbError.message);
+    }
+    
+    console.error('❌ Failed to post:', e.message);
+    if (e.data) {
+      console.error('API Error:', JSON.stringify(e.data, null, 2));
     }
     
     throw e;
@@ -247,9 +247,6 @@ async function postThread(tweets, options = {}) {
         await new Promise(r => setTimeout(r, 1000));
       }
     } catch (e) {
-      console.error(`❌ Failed at tweet ${i + 1}:`, e.message);
-      console.log('Posted so far:', posted.length);
-      
       // Log error to database
       try {
         db.logError({
@@ -262,6 +259,9 @@ async function postThread(tweets, options = {}) {
       } catch (dbError) {
         console.error('Failed to log error to database:', dbError.message);
       }
+      
+      console.error(`❌ Failed at tweet ${i + 1}:`, e.message);
+      console.log('Posted so far:', posted.length);
       
       throw e;
     }
