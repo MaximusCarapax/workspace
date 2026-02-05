@@ -180,7 +180,41 @@
         "The one thing that changed how I approach my online business was having Google shut down my email account, forcing me to completely rebuild my online identity."
       ],
       "contentId": "C004"
+    },
+    {
+      "id": "I011",
+      "text": "Sub-agents have zero awareness of time passing. They can't 'checkpoint every few minutes' because they don't experience minutes. OpenClaw tracks runtime externally — the agent is blind to it. You can't ask an AI to do something based on elapsed time because time doesn't exist in their context window.",
+      "platform": "x",
+      "tags": [
+        "ai",
+        "agents",
+        "architecture"
+      ],
+      "source": "manual",
+      "createdAt": "2026-02-05T11:00:23.036Z",
+      "status": "promoted",
+      "hooks": [
+        "You can't ask an AI agent to 'checkpoint every 5 minutes' — they don't experience time. Time doesn't exist in their context window. The orchestrator tracks it; the agent is blind.",
+        "Sub-agents have zero awareness of time passing. Minutes, hours — completely invisible to them. This fundamentally changes how you design agent workflows.",
+        "Discovered a wild limitation: AI agents can't do time-based tasks because they don't perceive duration. You can't say 'every few minutes' — time doesn't exist in their world."
+      ],
+      "contentId": "C006"
+    },
+    {
+      "id": "I012",
+      "text": "Even with explicit REQUIRED instructions in guidelines, sub-agents skip workflow steps like adding notes or moving pipeline stages. The fix? More explicit language ('REQUIRED') helps, but enforcement must happen at the system level — AI compliance is probabilistic, not deterministic.",
+      "platform": "x",
+      "tags": [
+        "ai",
+        "agents",
+        "building"
+      ],
+      "source": "manual",
+      "createdAt": "2026-02-05T11:00:23.099Z",
+      "status": "raw",
+      "hooks": [],
+      "contentId": null
     }
   ],
-  "lastId": 10
+  "lastId": 12
 }

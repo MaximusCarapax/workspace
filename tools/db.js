@@ -73,7 +73,35 @@ function tasksBacklog() {
 }
 
 function tasksList(options = {}) {
-  const tasks = db.getTasks(options);
+  let sql = `
+    SELECT t.*, p.name as project_name 
+    FROM tasks t 
+    LEFT JOIN projects p ON t.project_id = p.id 
+    WHERE 1=1
+  `;
+  const params = [];
+  
+  if (options.status) {
+    sql += ` AND t.status = ?`;
+    params.push(options.status);
+  } else {
+    sql += ` AND t.status != 'done'`;
+  }
+  
+  if (options.project) {
+    if (isNaN(options.project)) {
+      sql += ` AND p.name LIKE ?`;
+      params.push(`%${options.project}%`);
+    } else {
+      sql += ` AND t.project_id = ?`;
+      params.push(parseInt(options.project));
+    }
+  }
+  
+  sql += ` ORDER BY t.priority, t.created_at`;
+  
+  const tasks = db.db.prepare(sql).all(...params);
+  
   if (tasks.length === 0) {
     console.log('No tasks found.');
     return;
@@ -90,13 +118,12 @@ function tasksList(options = {}) {
       'cancelled': '❌'
     }[task.status] || '?';
     
-    console.log(`  ${status} [${task.id}] ${priority} ${task.title}`);
-    if (task.due_date) {
-      console.log(`       Due: ${task.due_date}`);
-    }
-    if (task.blocked_reason) {
-      console.log(`       Blocked: ${task.blocked_reason}`);
-    }
+    let line = `  ${status} [${task.id}] ${priority} ${task.title}`;
+    if (task.project_name) line += ` [${task.project_name}]`;
+    console.log(line);
+    
+    if (task.due_date) console.log(`       Due: ${task.due_date}`);
+    if (task.blocked_reason) console.log(`       Blocked: ${task.blocked_reason}`);
   }
   console.log('');
 }
@@ -114,6 +141,58 @@ function tasksDone(id) {
 function tasksUpdate(id, updates) {
   db.updateTask(id, updates);
   console.log(`✅ Updated task #${id}`);
+}
+
+// ============================================================
+// PROJECT FUNCTIONS
+// ============================================================
+
+function projectsList() {
+  const projects = db.db.prepare(`
+    SELECT p.*, 
+      (SELECT COUNT(*) FROM tasks WHERE project_id = p.id AND status != 'done') as active_tasks,
+      (SELECT COUNT(*) FROM tasks WHERE project_id = p.id AND status = 'done') as done_tasks
+    FROM projects p
+    WHERE status != 'archived'
+    ORDER BY name
+  `).all();
+  
+  if (projects.length === 0) {
+    console.log('No projects found. Use "db.js todos project-add <name>" to create one.');
+    return;
+  }
+  
+  console.log('\n📁 Projects\n');
+  for (const p of projects) {
+    const status = { active: '🟢', paused: '⏸️', completed: '✅', archived: '📦' }[p.status] || '';
+    console.log(`  ${status} [${p.id}] ${p.name} (${p.active_tasks} active, ${p.done_tasks} done)`);
+    if (p.description) console.log(`       ${p.description}`);
+  }
+  console.log('');
+}
+
+function projectAdd(name) {
+  const id = db.db.prepare('INSERT INTO projects (name) VALUES (?)').run(name).lastInsertRowid;
+  console.log(`✅ Created project #${id}: ${name}`);
+}
+
+function taskAssignProject(taskId, projectRef) {
+  // projectRef can be id (number) or name (string)
+  let projectId;
+  if (isNaN(projectRef)) {
+    const project = db.db.prepare('SELECT id FROM projects WHERE name LIKE ?').get(`%${projectRef}%`);
+    if (!project) {
+      console.log(`❌ Project "${projectRef}" not found`);
+      return;
+    }
+    projectId = project.id;
+  } else {
+    projectId = parseInt(projectRef);
+  }
+  
+  db.updateTask(taskId, { projectId: projectId });
+  const project = db.db.prepare('SELECT name FROM projects WHERE id = ?').get(projectId);
+  console.log(`✅ Task #${taskId} assigned to project: ${project.name}`);
 }
 
 // ============================================================
@@ -833,7 +912,7 @@ function pipelineBoard(options = {}) {
   const showType = options.type || null; // null = show all, 'feature', 'story', or 'raid'
   
   const featureStages = ['idea', 'spec', 'spec-review', 'building', 'final-review', 'live'];
-  const storyStages = ['todo', 'in-progress', 'qa', 'done', 'blocked'];
+  const storyStages = ['backlog', 'in-progress', 'qa', 'done', 'blocked'];
   const raidTypes = ['risk', 'issue', 'assumption', 'dependency'];
   
   const stageEmojis = {
@@ -1404,12 +1483,15 @@ function showHelp() {
 
 Usage: node tools/db.js <command> [subcommand] [args]
 
-BACKLOG
-  backlog list [--status todo|done|all]  List all tasks
-  backlog prioritize                     Smart prioritized view
-  backlog add "Title" [--priority 1-4]   Add task
-  backlog done <id>                      Complete task
-  backlog update <id> --status <status>  Update task
+TODOS
+  todos projects                       List all projects
+  todos project-add "Name"             Create a project
+  todos assign <task_id> <project_id>  Assign task to project
+  todos list [--status todo|done|all] [--project <id|name>]  List tasks
+  todos prioritize                     Smart prioritized view
+  todos add "Title" [--priority 1-4]   Add task
+  todos done <id>                      Complete task
+  todos update <id> --status <status>  Update task
 
 COSTS
   costs today                            Today's spending
@@ -1458,7 +1540,7 @@ PIPELINE
     feature — Product features (default)
       Stages: idea → spec → spec-review → building → live
     story — Implementation tasks linked to features
-      Stages: todo → in-progress → qa → done (+ blocked)
+      Stages: backlog → in-progress → qa → done (+ blocked)
 
 MEMORY
   memory add "content" --category fact   Add memory
@@ -1499,10 +1581,22 @@ try {
   const flags = parseFlags(args);
   
   switch (command) {
-    case 'backlog':
+    case 'todos':
       switch (subcommand) {
+        case 'projects':
+          projectsList();
+          break;
+        case 'project-add':
+          projectAdd(args[2]);
+          break;
+        case 'assign':
+          taskAssignProject(parseInt(args[2]), args[3]);
+          break;
         case 'list':
-          tasksList({ status: flags.status === 'all' ? null : flags.status });
+          tasksList({ 
+            status: flags.status === 'all' ? null : flags.status,
+            project: flags.project 
+          });
           break;
         case 'prioritize':
           tasksBacklog();

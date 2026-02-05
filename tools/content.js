@@ -501,6 +501,368 @@ Return as JSON array: ["hook1", "hook2", ...]`;
     }
   },
   
+  select: () => {
+    const id = args[1];
+    const hookNumber = args[2];
+    
+    if (!id || !hookNumber) {
+      console.log('Usage: content select <id> <hook_number>');
+      process.exit(1);
+    }
+    
+    try {
+      // Get item from DB
+      const item = getContentItem(parseInt(id));
+      if (!item) {
+        console.error(`❌ Item ${id} not found`);
+        process.exit(1);
+      }
+      
+      // Check status is 'hooks' and hooks array exists
+      if (item.status !== 'hooks') {
+        console.error(`❌ Item ${id} is not in 'hooks' status (current: ${item.status})`);
+        process.exit(1);
+      }
+      
+      if (!item.hooks) {
+        console.error(`❌ Item ${id} has no generated hooks. Run 'content hooks ${id}' first.`);
+        process.exit(1);
+      }
+      
+      // Parse hooks JSON, validate hook_number is valid index (1-based)
+      let hooks;
+      try {
+        hooks = JSON.parse(item.hooks);
+      } catch (e) {
+        console.error(`❌ Failed to parse hooks data for item ${id}`);
+        process.exit(1);
+      }
+      
+      if (!Array.isArray(hooks)) {
+        console.error(`❌ Hooks data is not an array for item ${id}`);
+        process.exit(1);
+      }
+      
+      const index = parseInt(hookNumber) - 1;
+      if (isNaN(index) || index < 0 || index >= hooks.length) {
+        console.error(`❌ Invalid hook number ${hookNumber}. Valid range: 1-${hooks.length}`);
+        process.exit(1);
+      }
+      
+      const selectedHook = hooks[index];
+      
+      // Update item
+      updateContentItem(parseInt(id), {
+        selected_hook: selectedHook,
+        status: 'draft'
+      });
+      
+      console.log(`✅ Selected hook ${hookNumber} for item ${id}:`);
+      console.log(`"${selectedHook}"`);
+      console.log(`\nStatus updated to 'draft'. Use "content draft ${id}" to generate content.`);
+      
+    } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to select hook for content item',
+        stack: error.stack
+      });
+      console.error(`❌ Failed to select hook: ${error.message}`);
+      process.exit(1);
+    }
+  },
+  
+  draft: async () => {
+    const id = args[1];
+    
+    if (!id) {
+      console.log('Usage: content draft <id>');
+      process.exit(1);
+    }
+    
+    try {
+      // Get item from DB
+      const item = getContentItem(parseInt(id));
+      if (!item) {
+        console.error(`❌ Item ${id} not found`);
+        process.exit(1);
+      }
+      
+      // Check status is 'draft' and selected_hook exists
+      if (item.status !== 'draft') {
+        console.error(`❌ Item ${id} is not in 'draft' status (current: ${item.status})`);
+        process.exit(1);
+      }
+      
+      if (!item.selected_hook) {
+        console.error(`❌ Item ${id} has no selected hook. Run 'content select ${id} <number>' first.`);
+        process.exit(1);
+      }
+      
+      console.log(`🔄 Generating draft for item ${id}...`);
+      
+      // Generate content using AI based on platform
+      let prompt;
+      if (item.platform === 'linkedin') {
+        prompt = `Hook: ${item.selected_hook}
+Platform: LinkedIn
+Title: ${item.title || 'No title'}
+Notes: ${item.notes || 'None'}
+
+Generate a LinkedIn post draft based on the hook above.
+Requirements:
+- 150-250 words
+- Professional but human tone
+- End with a call to action
+- Include relevant hashtags
+
+Return only the draft content, no additional commentary.`;
+      } else if (item.platform === 'x' || item.platform === 'twitter') {
+        prompt = `Hook: ${item.selected_hook}
+Platform: X (Twitter)
+Title: ${item.title || 'No title'}
+Notes: ${item.notes || 'None'}
+
+Generate an X/Twitter post draft based on the hook above.
+Requirements:
+- Under 280 characters
+- Punchy and conversational
+- Include relevant hashtags
+
+Return only the draft content, no additional commentary.`;
+      } else {
+        prompt = `Hook: ${item.selected_hook}
+Platform: ${item.platform}
+Title: ${item.title || 'No title'}
+Notes: ${item.notes || 'None'}
+
+Generate a social media post draft based on the hook above.
+Return only the draft content, no additional commentary.`;
+      }
+      
+      const response = await route({
+        type: 'generate',
+        prompt: prompt,
+        sessionId: 'content-draft',
+        source: 'content-pipeline'
+      });
+      
+      const draftContent = response.result || response.content || response;
+      
+      // Update item
+      updateContentItem(parseInt(id), {
+        draft: draftContent,
+        status: 'review'
+      });
+      
+      console.log(`✅ Draft generated for item ${id}:`);
+      console.log('\n' + '─'.repeat(60));
+      console.log(draftContent);
+      console.log('─'.repeat(60));
+      console.log(`\nStatus updated to 'review'. Use "content review ${id}" to review.`);
+      
+    } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to generate draft for content item',
+        stack: error.stack
+      });
+      console.error(`❌ Failed to generate draft: ${error.message}`);
+      process.exit(1);
+    }
+  },
+  
+  review: async () => {
+    const id = args[1];
+    
+    if (!id) {
+      console.log('Usage: content review <id> [--score 1-5] [--notes "feedback"]');
+      process.exit(1);
+    }
+    
+    try {
+      // Get item from DB
+      const item = getContentItem(parseInt(id));
+      if (!item) {
+        console.error(`❌ Item ${id} not found`);
+        process.exit(1);
+      }
+      
+      // Check status is 'review' and draft exists
+      if (item.status !== 'review') {
+        console.error(`❌ Item ${id} is not in 'review' status (current: ${item.status})`);
+        process.exit(1);
+      }
+      
+      if (!item.draft) {
+        console.error(`❌ Item ${id} has no draft. Run 'content draft ${id}' first.`);
+        process.exit(1);
+      }
+      
+      let score = getFlag('--score');
+      let notes = getFlag('--notes');
+      
+      // If no score provided, use AI to auto-score
+      if (!score) {
+        console.log(`🔄 Auto-scoring draft for item ${id}...`);
+        
+        const prompt = `Draft content:
+${item.draft}
+
+Platform: ${item.platform}
+Hook: ${item.selected_hook || 'None'}
+Title: ${item.title || 'None'}
+
+Rate this draft on a scale of 1-5:
+- 5 = Ready to post
+- 4 = Minor tweaks needed
+- 3 = Needs work
+- 2 = Major revision
+- 1 = Start over
+
+Provide a JSON response with:
+{
+  "score": 1-5,
+  "notes": "brief feedback explaining the score"
+}`;
+        
+        const response = await route({
+          type: 'generate',
+          prompt: prompt,
+          sessionId: 'content-review',
+          source: 'content-pipeline'
+        });
+        
+        const responseText = response.result || response.content || response;
+        let aiReview;
+        try {
+          // Try to parse JSON, handling markdown code blocks
+          const cleanText = responseText.replace(/```json\s*|\s*```/g, '').trim();
+          aiReview = JSON.parse(cleanText);
+        } catch (e) {
+          // Fallback: extract JSON
+          const jsonMatch = responseText.match(/\{.*\}/s);
+          if (jsonMatch) {
+            aiReview = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error('Failed to parse AI review response');
+          }
+        }
+        
+        score = aiReview.score;
+        notes = aiReview.notes;
+        console.log(`🤖 AI review score: ${score}/5`);
+      } else {
+        score = parseInt(score);
+        if (isNaN(score) || score < 1 || score > 5) {
+          console.error('❌ Score must be between 1 and 5');
+          process.exit(1);
+        }
+      }
+      
+      // Update item
+      const updates = {
+        review_score: score,
+        review_notes: notes || null
+      };
+      
+      if (score >= 4) {
+        updates.status = 'scheduled';
+      }
+      
+      updateContentItem(parseInt(id), updates);
+      
+      console.log(`✅ Review added for item ${id}:`);
+      console.log(`Score: ${score}/5`);
+      if (notes) console.log(`Notes: ${notes}`);
+      if (score >= 4) {
+        console.log(`Status updated to 'scheduled' (ready to schedule)`);
+      }
+      
+    } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to review content item',
+        stack: error.stack
+      });
+      console.error(`❌ Failed to review: ${error.message}`);
+      process.exit(1);
+    }
+  },
+  
+  kanban: () => {
+    const platformFilter = getFlag('--platform');
+    
+    try {
+      // Get all items (optionally filtered by platform)
+      const items = getContentItems({ platform: platformFilter });
+      
+      // Define status order for display
+      const statusOrder = ['idea', 'hooks', 'draft', 'review', 'scheduled', 'posted'];
+      
+      // Group by status
+      const grouped = {};
+      statusOrder.forEach(status => {
+        grouped[status] = items.filter(i => i.status === status);
+      });
+      
+      // Print header
+      console.log('\n');
+      statusOrder.forEach(status => {
+        const count = grouped[status].length;
+        const emoji = statusEmoji(status);
+        console.log(`${emoji} ${status.toUpperCase()} (${count})     `.slice(0, 15));
+      });
+      console.log('');
+      
+      // Print separator lines
+      statusOrder.forEach(() => {
+        process.stdout.write('─────────────   ');
+      });
+      console.log('');
+      
+      // Find max rows needed
+      const maxRows = Math.max(...statusOrder.map(s => grouped[s].length));
+      
+      // Print items row by row
+      for (let row = 0; row < maxRows; row++) {
+        const rowItems = [];
+        statusOrder.forEach(status => {
+          const columnItems = grouped[status];
+          if (row < columnItems.length) {
+            const item = columnItems[row];
+            const display = `${item.id} ${truncate(item.title || item.content, 10)}`;
+            rowItems.push(display.padEnd(15));
+          } else {
+            rowItems.push(''.padEnd(15));
+          }
+        });
+        console.log(rowItems.join('   '));
+      }
+      
+      console.log('');
+      
+      // Show counts
+      if (platformFilter) {
+        console.log(`Filtered by platform: ${platformFilter}`);
+      }
+      console.log(`Total items: ${items.length}`);
+      
+    } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to display kanban board',
+        stack: error.stack
+      });
+      console.error(`❌ Failed to display kanban: ${error.message}`);
+      process.exit(1);
+    }
+  },
+  
   help: () => {
     console.log(`
 📝 Content Pipeline v2 CLI
@@ -510,6 +872,10 @@ Pipeline: idea → hooks → draft → review → scheduled → posted
 Commands:
   add <content> [--platform linkedin|x] [--notes "..."]  Add new idea
   hooks <id>                                           Generate hook options
+  select <id> <hook_number>                            Pick a hook from generated hooks
+  draft <id>                                           Generate draft content from selected hook
+  review <id> [--score 1-5] [--notes "..."]           Add review score and notes
+  kanban [--platform linkedin|x]                       Show kanban-style board view
   list [--status ...] [--platform ...]                 List items  
   view <id>                                            View item details
   edit <id> [--title] [--status] [--platform] [--notes] Edit item
@@ -525,6 +891,10 @@ Platforms: linkedin, x
 Examples:
   node content.js add "AI tools are changing how we work" --platform linkedin
   node content.js hooks 1
+  node content.js select 1 3
+  node content.js draft 1
+  node content.js review 1 --score 4 --notes "Good, just needs a hashtag"
+  node content.js kanban --platform linkedin
   node content.js list --status idea
   node content.js view 1
   node content.js schedule 1 --time "2026-02-06 09:00"

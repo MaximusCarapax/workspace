@@ -817,3 +817,15 @@
 +### Update showHelp:
 +Document --type flag for create and list commands, document story stages.
 +
+
+# 2026-02-05 12:01:14.447856
++Read content-pipeline-spec.md and implement the 4 new commands (select, draft, review, kanban) in tools/content.js. Follow the spec exactly. Add them to the commands object alongside the existing commands.
+
+# 2026-02-05 12:01:14.447954
++Read content-pipeline-spec.md and implement the 4 new commands (select, draft, review, kanban) in tools/content.js. Follow the spec exactly. Add them to the commands object alongside the existing commands.
+
+# 2026-02-05 12:06:16.957386
++Read backlog-project-spec.md and implement the project grouping enhancements for the backlog in tools/db.js. Follow the spec exactly.
+
+# 2026-02-05 12:06:16.957487
++Read backlog-project-spec.md and implement the project grouping enhancements for the backlog in tools/db.js. Follow the spec exactly.

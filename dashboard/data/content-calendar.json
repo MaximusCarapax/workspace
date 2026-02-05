@@ -57,7 +57,7 @@
       "content": "Yesterday I discovered a terrifying truth: Google can, and will, cut you off at the knees. My email, essential for my business, was disabled with zero warning.",
       "fullInsight": "Google disabled my email for 'bot detection' — mid-production day. Had to create ProtonMail, new LinkedIn, migrate everything. Lesson: Don't put all your eggs in one provider's basket.",
       "platform": "both",
-      "status": "draft",
+      "status": "scheduled",
       "tags": [
         "recovery",
         "disasterrecovery",
@@ -65,7 +65,7 @@
       ],
       "insightId": "I010",
       "createdAt": "2026-02-04T11:04:00.673Z",
-      "scheduledFor": null,
+      "scheduledFor": "2026-02-07T08:00:00+11:00",
       "publishedAt": null,
       "notes": "From insight: Google disabled my email for 'bot detection' — mid..."
     },
@@ -85,7 +85,24 @@
       "scheduledFor": null,
       "publishedAt": null,
       "notes": "From insight: 99% of our AI spend is on Claude Opus. We built a ..."
+    },
+    {
+      "id": "C006",
+      "content": "You can't ask an AI agent to 'checkpoint every 5 minutes' — they don't experience time. Time doesn't exist in their context window. The orchestrator tracks it; the agent is blind.",
+      "fullInsight": "Sub-agents have zero awareness of time passing. They can't 'checkpoint every few minutes' because they don't experience minutes. OpenClaw tracks runtime externally — the agent is blind to it. You can't ask an AI to do something based on elapsed time because time doesn't exist in their context window.",
+      "platform": "x",
+      "status": "scheduled",
+      "tags": [
+        "ai",
+        "agents",
+        "architecture"
+      ],
+      "insightId": "I011",
+      "createdAt": "2026-02-05T11:01:15.875Z",
+      "scheduledFor": "2026-02-06T08:00:00+11:00",
+      "publishedAt": null,
+      "notes": "Today's pipeline work — time blindness discovery"
     }
   ],
-  "lastId": 5
+  "lastId": 6
 }
