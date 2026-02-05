@@ -396,9 +396,24 @@ node tools/voice-agent-call.js list                          # Recent calls
 
 ## Hume AI Voice Agent (AU Number)
 - **Number:** +61 468 089 420
-- **Config ID:** 4d7c2310-e874-493c-b87c-55030cfbc3a3
 - **Voice:** Ito (male, American accent)
-- **LLM:** Claude 3.5 Sonnet
+- **LLM:** Gemini 2.5 Flash (Claude doesn't work with Twilio integration)
 - **Personality:** Max - Jason's AI assistant
 
-**Inbound calls:** Call the number, Hume EVI answers as Max.
+### Configs
+| Name | ID | LLM | Status |
+|------|-----|-----|--------|
+| max-gemini-25 | cc7579f9-a0a1-4dd0-bacc-62971d333de4 | Gemini 2.5 Flash | ✅ Working |
+| max-outbound-v2 | 5dbca521-f55a-44ec-91b5-cba75fc4874c | Hume Default | ✅ Working |
+| max-gemini | 3244cfd6-20cf-4355-9eb9-754eeaae7fb6 | Gemini 2.0 Flash | ✅ Working |
+| max-gemini-lite | 8f184d1d-8ee8-4c22-9f66-76af25bb44b3 | Gemini 2.5 Flash Lite | ❌ Failed |
+| max-outbound | 1307331d-531b-4898-9777-4b8807e35efe | Claude 3.5 Sonnet | ❌ Failed |
+
+### Outbound Calls
+```bash
+node tools/hume-call.js <number> [name]           # Call someone
+node tools/hume-call.js +61429512420 "Jason"      # Example
+node tools/hume-call.js status <callSid>          # Check call status
+```
+
+**Inbound calls:** Call +61 468 089 420, Hume EVI answers as Max.
