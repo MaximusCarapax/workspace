@@ -235,7 +235,7 @@ async function callGemini(prompt) {
           const json = JSON.parse(data);
           // Check for auth errors (401/403) before processing JSON error
           if (res.statusCode === 401 || res.statusCode === 403) {
-            reject(new Error(`OpenRouter auth error (HTTP ${res.statusCode}): Check your API key`));
+            reject(new Error('AUTH_ERROR: OpenRouter auth error. Check your API key.'));
             return;
           }
           if (json.error) {
@@ -537,6 +537,10 @@ ${sourcesText}`;
     } catch (e) {
       if (e.message === 'QUOTA_EXCEEDED') {
         console.error('[Research] Gemini quota exceeded, falling back to DeepSeek...');
+      } else if (e.message.startsWith('AUTH_ERROR:')) {
+        console.error(`[Research] ${e.message}`);
+        console.error('[Research] Cannot proceed with Gemini due to authentication error.');
+        process.exit(1);
       } else {
         console.error(`[Research] Gemini failed: ${e.message}, falling back to DeepSeek...`);
       }
