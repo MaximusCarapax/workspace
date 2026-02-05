@@ -72,12 +72,12 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - **Capabilities:** SMS ✓, MMS ✓, Voice ✓
 - **Status:** Needs webhook setup to receive messages
 
-### Australian Number (VoIPLine) - IN PROGRESS
-- **Provider:** VoIPLine Telecom (30-day trial)
-- **Portal:** https://au.voipcloud.online/customer/?partnerId=1
-- **Status:** Webhook integration confirmed working (2026-02-01)! Need to complete setup and get number.
-- **Cost:** ~$12/mo for mobile number + API access
-- **Why:** Proper AU 04 mobile number with SMS/Voice + API/webhooks
+### Australian Number (Twilio AU) ✅
+- **Number:** +61 468 089 420
+- **Provider:** Twilio AU (upgraded account, separate from US)
+- **Capabilities:** SMS ✓, Voice ✓
+- **Status:** Active as of 2026-02-05
+- **Credentials:** `twilio_au_*` in .env and credentials.json
 
 ## Infrastructure
 - Telegram bot connected

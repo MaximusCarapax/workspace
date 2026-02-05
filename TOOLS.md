@@ -78,11 +78,19 @@ node tools/db.js health           # View latest status
 node tools/db.js health gemini    # View history
 ```
 
-## Phone Number 📱
-**+1 (820) 900-4002** - Twilio
+## Phone Numbers 📱
+
+### US Number
+**+1 (820) 900-4002** - Twilio US
 - SMS/MMS/Voice enabled
 - Trial account ($15.50 credit)
 - Can send SMS, receive SMS (needs webhook setup)
+
+### AU Number 🇦🇺
+**+61 468 089 420** - Twilio AU (upgraded account)
+- SMS/Voice enabled
+- Proper Australian mobile number
+- Credentials: `twilio_au_*` in .env and credentials.json
 
 ### Voice Calls (Outbound)
 ```bash

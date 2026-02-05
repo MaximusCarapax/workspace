@@ -351,3 +351,98 @@
 
 # 2026-02-05 01:15:34.581221
 +**Bug #2: Missing clearTimeout on res.destroy** - In the fetchUrl function around line 142, when res.destroy() is called due to size limit, clearTimeout isn't called. Add: clearTimeout(timeout) before res.destroy()
+
+# 2026-02-05 01:16:19.960643
++**Bug #3: Inconsistent error handling** - In callGemini function around line 225, currently only QUOTA_EXCEEDED gets special treatment. Add handling for auth errors (401/403) to NOT trigger fallback (config issue, not transient).
+
+# 2026-02-05 01:17:08.828755
++Can you fix these three bugs?Stop. Let me be more specific about the exact bugs to fix:
+
+# 2026-02-05 01:17:21.070984
++1. **Remove the auto-install code at the bottom** - Remove lines 474-479 (the try/catch block with execSync)
+
+# 2026-02-05 01:18:44.865278
++2. **Add clearTimeout before res.destroy()** - Around line 142 in fetchUrl function, add `clearTimeout(timeout);` before `res.destroy()`
+
+# 2026-02-05 01:19:16.665944
++3. **Add auth error handling in callGemini** - Around line 225, add handling for 401/403 errors to NOT trigger fallback
+
+# 2026-02-05 01:24:16.989681
++I need to modify the content.js file to implement two new commands according to the Content Pipeline v2 spec:
+
+# 2026-02-05 01:24:18.335077
++I need to implement two new commands in tools/content.js:
+
+# 2026-02-05 01:24:19.905078
++I need to implement Content Pipeline feature #1: DB Schema Updates as specified in specs/content-pipeline-v2.md.
+
+# 2026-02-05 01:24:48.894223
++I need to implement Content Pipeline feature #2: Hook Generation + Selection for the content.js tool.
+
+# 2026-02-05 01:25:19.038660
++I need you to make the following specific changes:
+
+# 2026-02-05 01:25:25.226842
++1. In lib/db.js, rename the existing "content" table to "content_items"
+
+# 2026-02-05 01:26:21.099138
++2. Add these new columns to content_items table (use ALTER TABLE statements):
+
+# 2026-02-05 01:26:21.114113
++   - hooks TEXT
+
+# 2026-02-05 01:26:21.124901
++   - selected_hook TEXT  
+
+# 2026-02-05 01:26:21.132376
++   - draft TEXT
+
+# 2026-02-05 01:26:21.142773
++   - review_score INTEGER
+
+# 2026-02-05 01:26:21.152866
++   - review_notes TEXT
+
+# 2026-02-05 01:26:21.162232
++   - scheduled_time TEXT
+
+# 2026-02-05 01:26:21.170704
++   - posted_time TEXT
+
+# 2026-02-05 01:26:21.178064
++   - post_url TEXT
+
+# 2026-02-05 01:26:21.219282
++3. Update the status CHECK constraint to include: idea, hooks, draft, review, scheduled, posted
+
+# 2026-02-05 01:26:25.376673
++Implement Content Pipeline v2 changes:
+
+# 2026-02-05 01:37:13.441477
++Fix content.js - there are calls to loadData() but that function doesn't exist. 
++
++The file uses lib/db.js for database access. Replace all loadData() calls with:
++db.getContentItems()
++
++This function returns all content items from the database. The kanban, stats, and other commands need this fix.
++
++Also make sure the data structure returned is compatible - getContentItems returns an array of items directly, not {items: [...]}.
+
+# 2026-02-05 01:37:13.442084
++Fix content.js - there are calls to loadData() but that function doesn't exist. 
++
++The file uses lib/db.js for database access. Replace all loadData() calls with:
++db.getContentItems()
++
++This function returns all content items from the database. The kanban, stats, and other commands need this fix.
++
++Also make sure the data structure returned is compatible - getContentItems returns an array of items directly, not {items: [...]}.
+
+# 2026-02-05 01:54:18.178550
++Step 1: Fix database schema in lib/db.js for Content Pipeline v2
+
+# 2026-02-05 01:55:14.969117
++The current lib/db.js has a `content` table, but the ALTER TABLE statements are trying to modify a `content` table incorrectly. I need you to:
+
+# 2026-02-05 01:56:59.324677
++Task: Transform tools/content.js for Content Pipeline v2
