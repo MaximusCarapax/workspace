@@ -538,7 +538,7 @@ async function statusCommand() {
         
         // Get index state info
         const indexedSessions = sqlite.prepare('SELECT COUNT(*) as count FROM session_index_state').get()?.count || 0;
-        const failedSessions = sqlite.prepare('SELECT COUNT(*) as count FROM session_index_state WHERE status = "failed"').get()?.count || 0;
+        const failedSessions = sqlite.prepare("SELECT COUNT(*) as count FROM session_index_state WHERE status = 'failed'").get()?.count || 0;
         
         sqlite.close();
         
@@ -581,7 +581,7 @@ async function healthCommand() {
         
         const totalChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks').get()?.count || 0;
         const totalSessions = sqlite.prepare('SELECT COUNT(DISTINCT session_id) as count FROM session_chunks').get()?.count || 0;
-        const failedSessions = sqlite.prepare('SELECT COUNT(*) as count FROM session_index_state WHERE status = "failed"').get()?.count || 0;
+        const failedSessions = sqlite.prepare("SELECT COUNT(*) as count FROM session_index_state WHERE status = 'failed'").get()?.count || 0;
         const lastIndexed = sqlite.prepare('SELECT MAX(last_indexed) as latest FROM session_index_state').get()?.latest;
         
         sqlite.close();
