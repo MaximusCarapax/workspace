@@ -1298,7 +1298,7 @@ async function searchCommand(query, options) {
             filterParams.push(`%"${options.topic}"%`);
         }
         
-        const filterClause = filterConditions.length > 0 ? 'WHERE ' + filterConditions.join(' AND ') : '';
+        const filterClause = filterConditions.length > 0 ? 'WHERE ' + filterConditions.join(' AND ') + ' AND' : 'WHERE';
         
         // 1. Run embedding search (cosine similarity)
         console.log('Running embedding search...');
@@ -1314,8 +1314,7 @@ async function searchCommand(query, options) {
                 sc.has_decision,
                 sc.has_action
             FROM session_chunks sc
-            ${filterClause}
-            AND sc.embedding IS NOT NULL
+            ${filterClause} sc.embedding IS NOT NULL
         `;
         
         const allChunks = sqlite.prepare(embeddingSql).all(...filterParams);
