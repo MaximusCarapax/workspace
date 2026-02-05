@@ -176,7 +176,7 @@ async function postTweet(text, options = {}) {
     try {
       db.logError({
         level: 'error',
-        source: 'x-post.js',
+        source: 'x-post',
         message: e.message,
         details: `Failed to post tweet: ${validated.substring(0, 50)}...`,
         stack: e.stack
@@ -251,7 +251,7 @@ async function postThread(tweets, options = {}) {
       try {
         db.logError({
           level: 'error',
-          source: 'x-post.js',
+          source: 'x-post',
           message: e.message,
           details: `Failed to post thread at tweet ${i + 1}/${validated.length}`,
           stack: e.stack
