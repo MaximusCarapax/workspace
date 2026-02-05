@@ -1080,3 +1080,42 @@
 
 # 2026-02-05 22:25:55.957253
 +Create the following schema tables in lib/db.js:
+
+# 2026-02-05 22:28:36.900277
++```sql
+
+# 2026-02-05 22:30:22.745082
++CREATE TABLE knowledge_cache (
+
+# 2026-02-05 22:32:57.451406
++    id INTEGER PRIMARY KEY,
+
+# 2026-02-05 22:34:16.163889
++    
+
+# 2026-02-05 22:35:37.736274
++    -- Core content
+
+# 2026-02-05 22:36:52.773616
++    title TEXT NOT NULL,
+
+# 2026-02-05 22:38:08.829897
++    summary TEXT NOT NULL,
+
+# 2026-02-05 22:40:03.546077
++    source_type TEXT NOT NULL,
+
+# 2026-02-05 22:41:16.639185
++    source_url TEXT,
+
+# 2026-02-05 22:42:50.253119
++    source_session TEXT,
+
+# 2026-02-05 22:44:43.991046
++    
+
+# 2026-02-05 22:46:32.020598
++    -- Metadata
+
+# 2026-02-05 22:48:53.652466
++    topic_tags TEXT,

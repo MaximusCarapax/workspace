@@ -39,6 +39,20 @@ Real-time capture of process problems, bugs, and annoyances. Reviewed weekly.
 **Fix:** Changed to `claude-haiku-4-5-20251001`
 **Lesson:** Always verify model names against Anthropic API. No `-latest` alias for 4.5 models yet.
 
+### 2026-02-05 — Oversized chunks failing embeddings
+**Context:** Session Memory cron runs every 5 min, trying to embed chunks
+**Friction:** 6 chunks from old session (d026368f) are 25k-75k tokens — way over 8192 limit for embedding model
+**Impact:** Minor — keeps logging failures, but search works via BM25
+**Fix:** Needs chunking logic to enforce max size. Low priority.
+**Lesson:** Should have had max-chunk-size from the start. Need to add size enforcement to chunking.
+
+### 2026-02-05 — Sub-agents + aider = context explosion
+**Context:** Spawned two builder sub-agents to implement BM25 and Knowledge Cache
+**Friction:** Both hit 200K context limit within ~60s. Aider dumps full file contents into chat history, which fills the sub-agent context fast when polling.
+**Impact:** Major — both builds failed, no output
+**Fix:** Wrote the code directly myself instead
+**Lesson:** Sub-agent + aider combo doesn't work for complex tasks. Options: (1) I drive aider directly with smaller steps, (2) skip aider and write code directly, (3) sub-agents use simpler tools. The overhead of aider's verbose output is brutal in a sub-agent context.
+
 ---
 
 *Add new entries at the bottom. Review weekly on Sunday.*
