@@ -689,6 +689,48 @@ function memorySearch(query) {
   console.log('');
 }
 
+async function memorySemanticSearch(query, options = {}) {
+  const limit = options.limit || 10;
+  const threshold = options.threshold || 0.4;
+  const model = 'text-embedding-3-small';
+  
+  try {
+    console.log(`\n🧠 Semantic Search: "${query}"\n`);
+    console.log('Generating query embedding...');
+    
+    const queryEmbedding = await db.generateEmbedding(query);
+    
+    console.log('Searching memories...');
+    const results = db.searchMemoryByEmbedding({
+      model,
+      embedding: queryEmbedding,
+      limit,
+      threshold
+    });
+    
+    if (results.length === 0) {
+      console.log('No semantically similar memories found.');
+      // Fallback to keyword search
+      console.log('\nFalling back to keyword search...');
+      memorySearch(query);
+      return;
+    }
+    
+    console.log(`Found ${results.length} similar memories:\n`);
+    for (const m of results) {
+      const similarity = (m.similarity * 100).toFixed(1);
+      console.log(`  [${m.id}] (${m.category}) ${similarity}% similarity`);
+      console.log(`    ${m.subject || '(no subject)'}`);
+      console.log(`    ${m.content.substring(0, 120)}${m.content.length > 120 ? '...' : ''}`);
+      console.log('');
+    }
+  } catch (error) {
+    console.error('Error in semantic search:', error.message);
+    console.log('\nFalling back to keyword search...');
+    memorySearch(query);
+  }
+}
+
 function memoryList(category) {
   const results = db.getMemoryByCategory(category);
   if (results.length === 0) {
@@ -701,6 +743,58 @@ function memoryList(category) {
     console.log(`  [${m.id}] ${m.subject || '(no subject)'}`);
     console.log(`    ${m.content.substring(0, 80)}${m.content.length > 80 ? '...' : ''}`);
   }
+  console.log('');
+}
+
+async function memoryBackfillEmbeddings() {
+  const model = 'text-embedding-3-small';
+  
+  console.log('\n🧠 Backfilling Memory Embeddings\n');
+  
+  // Get memories that don't have embeddings yet
+  const memoriesWithoutEmbeddings = db.db.prepare(`
+    SELECT m.* FROM memory m
+    LEFT JOIN memory_embeddings me ON m.id = me.memory_id AND me.model = ?
+    WHERE me.memory_id IS NULL
+    ORDER BY m.importance DESC, m.created_at DESC
+  `).all(model);
+  
+  if (memoriesWithoutEmbeddings.length === 0) {
+    console.log('✅ All memories already have embeddings!');
+    return;
+  }
+  
+  console.log(`Found ${memoriesWithoutEmbeddings.length} memories without embeddings...`);
+  
+  let successCount = 0;
+  let errorCount = 0;
+  
+  for (const memory of memoriesWithoutEmbeddings) {
+    try {
+      console.log(`Processing [${memory.id}]: ${memory.content.substring(0, 50)}...`);
+      
+      const embedding = await db.generateEmbedding(memory.content);
+      db.addMemoryEmbedding({
+        memoryId: memory.id,
+        model,
+        embedding
+      });
+      
+      successCount++;
+      console.log(`  ✅ Generated embedding`);
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+    } catch (error) {
+      errorCount++;
+      console.log(`  ❌ Error: ${error.message}`);
+    }
+  }
+  
+  console.log(`\n🎯 Backfill Complete:`);
+  console.log(`  ✅ Success: ${successCount}`);
+  console.log(`  ❌ Errors: ${errorCount}`);
   console.log('');
 }
 
@@ -860,7 +954,9 @@ HEALTH
 
 MEMORY
   memory add "content" --category fact   Add memory
-  memory search "query"                  Search memory
+  memory search "query"                  Search memory (keyword-based)
+  memory semantic-search "query"         Search by meaning using embeddings
+  memory backfill-embeddings             Generate embeddings for existing memories
   memory list <category>                 List by category
 
 CONTACTS
@@ -1000,6 +1096,19 @@ try {
           break;
         case 'search':
           memorySearch(args[2]);
+          break;
+        case 'semantic-search':
+          (async () => {
+            await memorySemanticSearch(args[2], {
+              limit: flags.limit ? parseInt(flags.limit) : 10,
+              threshold: flags.threshold ? parseFloat(flags.threshold) : 0.7
+            });
+          })().catch(console.error);
+          break;
+        case 'backfill-embeddings':
+          (async () => {
+            await memoryBackfillEmbeddings();
+          })().catch(console.error);
           break;
         case 'list':
           memoryList(args[2]);
