@@ -1549,6 +1549,12 @@ MEMORY
   memory backfill-embeddings             Generate embeddings for existing memories
   memory list <category>                 List by category
 
+FRICTION
+  friction add "description" [--category <cat>]  Log friction (auto-increments if similar exists)
+  friction list [--all] [--category <cat>]       List unresolved friction
+  friction resolve <id> [--by <feature-id>]      Mark resolved, optionally link to fix
+  friction patterns                              Show patterns and repeat offenders
+
 CONTACTS
   contacts list                          List all contacts
   contacts add "Name" [--email --phone --company --role --tags --source]
@@ -1575,6 +1581,134 @@ function parseFlags(args) {
     }
   }
   return flags;
+}
+
+// ============================================================
+// FRICTION
+// ============================================================
+
+function frictionAdd(description, options = {}) {
+  if (!description) {
+    console.log('Usage: friction add "description" [--category <cat>]');
+    return;
+  }
+  
+  const category = options.category || 'general';
+  
+  // Check if similar friction exists (fuzzy match)
+  const existing = db.db.prepare(`
+    SELECT * FROM friction 
+    WHERE resolved = 0 AND description LIKE ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get('%' + description.substring(0, 30) + '%');
+  
+  if (existing) {
+    // Increment occurrences
+    db.db.prepare(`
+      UPDATE friction 
+      SET occurrences = occurrences + 1, last_occurred = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(existing.id);
+    console.log(`🔄 Friction #${existing.id} occurred again (x${existing.occurrences + 1}): ${existing.description.substring(0, 50)}...`);
+  } else {
+    const result = db.db.prepare(`
+      INSERT INTO friction (description, category, source)
+      VALUES (?, ?, 'manual')
+    `).run(description, category);
+    console.log(`✅ Logged friction #${result.lastInsertRowid}: ${description.substring(0, 50)}...`);
+  }
+}
+
+function frictionList(options = {}) {
+  const showResolved = options.all || false;
+  const category = options.category;
+  
+  let query = 'SELECT * FROM friction';
+  const conditions = [];
+  const params = [];
+  
+  if (!showResolved) {
+    conditions.push('resolved = 0');
+  }
+  if (category) {
+    conditions.push('category = ?');
+    params.push(category);
+  }
+  
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ');
+  }
+  query += ' ORDER BY occurrences DESC, last_occurred DESC';
+  
+  const items = db.db.prepare(query).all(...params);
+  
+  if (items.length === 0) {
+    console.log('No friction logged.' + (showResolved ? '' : ' Use --all to see resolved.'));
+    return;
+  }
+  
+  console.log('\n🔥 Friction Log\n');
+  for (const item of items) {
+    const status = item.resolved ? '✅' : '⬜';
+    const count = item.occurrences > 1 ? ` (x${item.occurrences})` : '';
+    const resolved = item.resolved_by ? ` → fixed by #${item.resolved_by}` : '';
+    console.log(`  ${status} [${item.id}] ${item.description.substring(0, 60)}${count}${resolved}`);
+    console.log(`      Category: ${item.category} | Last: ${formatDate(item.last_occurred)}`);
+  }
+  console.log('');
+}
+
+function frictionResolve(id, resolvedBy) {
+  if (!id) {
+    console.log('Usage: friction resolve <id> [--by <feature/story id>]');
+    return;
+  }
+  
+  db.db.prepare(`
+    UPDATE friction 
+    SET resolved = 1, resolved_at = CURRENT_TIMESTAMP, resolved_by = ?
+    WHERE id = ?
+  `).run(resolvedBy || null, id);
+  
+  console.log(`✅ Friction #${id} resolved` + (resolvedBy ? ` by #${resolvedBy}` : ''));
+}
+
+function frictionPatterns() {
+  const patterns = db.db.prepare(`
+    SELECT category, COUNT(*) as count, SUM(occurrences) as total_occurrences
+    FROM friction
+    WHERE resolved = 0
+    GROUP BY category
+    ORDER BY total_occurrences DESC
+  `).all();
+  
+  const repeat = db.db.prepare(`
+    SELECT * FROM friction
+    WHERE resolved = 0 AND occurrences > 1
+    ORDER BY occurrences DESC
+    LIMIT 10
+  `).all();
+  
+  console.log('\n📊 Friction Patterns\n');
+  
+  if (patterns.length > 0) {
+    console.log('  By Category:');
+    for (const p of patterns) {
+      console.log(`    ${p.category}: ${p.count} items, ${p.total_occurrences} total occurrences`);
+    }
+  }
+  
+  if (repeat.length > 0) {
+    console.log('\n  🔄 Repeat Offenders:');
+    for (const r of repeat) {
+      console.log(`    [${r.id}] x${r.occurrences}: ${r.description.substring(0, 50)}...`);
+    }
+  }
+  
+  if (patterns.length === 0 && repeat.length === 0) {
+    console.log('  No patterns detected yet.');
+  }
+  console.log('');
 }
 
 try {
@@ -1894,6 +2028,25 @@ try {
           pipelineBoard();
       }
       break;
+    
+    case 'friction':
+      switch (subcommand) {
+        case 'add':
+          frictionAdd(args[2], { category: flags.category });
+          break;
+        case 'list':
+          frictionList({ all: flags.all, category: flags.category });
+          break;
+        case 'resolve':
+          frictionResolve(parseInt(args[2]), flags.by);
+          break;
+        case 'patterns':
+          frictionPatterns();
+          break;
+        default:
+          frictionList();
+      }
+      break;
       
     case 'contacts':
       switch (subcommand) {
@@ -1924,3 +2077,4 @@ try {
   console.error('Error:', err.message);
   process.exit(1);
 }
+
