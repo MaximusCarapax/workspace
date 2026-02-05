@@ -92,6 +92,7 @@ program
       console.log(`   Title: ${title}`);
       console.log(`   Source: ${url}`);
       console.log(`   Note: This is a basic entry. Future versions will fetch and summarize the content.`);
+      console.log(`   To implement full web fetching, see Story 2 in specs/knowledge-cache-rag.md`);
     } catch (error) {
       console.error('❌ Error:', error.message);
       process.exit(1);
