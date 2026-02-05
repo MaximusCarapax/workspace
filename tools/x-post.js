@@ -176,7 +176,6 @@ async function postTweet(text, options = {}) {
     
     // Log error to database
     try {
-      const db = require('../lib/db');
       db.logError({
         level: 'error',
         source: 'x-post.js',
@@ -250,7 +249,6 @@ async function postThread(tweets, options = {}) {
       
       // Log error to database
       try {
-        const db = require('../lib/db');
         db.logError({
           level: 'error',
           source: 'x-post.js',

@@ -487,7 +487,6 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       
       // Log error to database
       try {
-        const db = require('../lib/db');
         db.logError({
           level: 'error',
           source: 'content.js',

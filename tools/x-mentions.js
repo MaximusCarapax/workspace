@@ -223,7 +223,6 @@ async function checkMentions(showAll = false) {
     } catch (apiError) {
       // Log error to database
       try {
-        const db = require('../lib/db');
         db.logError({
           level: 'error',
           source: 'x-mentions.js',
@@ -294,7 +293,6 @@ async function replyToMention(tweetId, text) {
   } catch (e) {
     // Log error to database
     try {
-      const db = require('../lib/db');
       db.logError({
         level: 'error',
         source: 'x-mentions.js',
@@ -388,7 +386,6 @@ Strategy: Bird CLI (free) → X API fallback (100 reads/month)
     
     // Log error to database
     try {
-      const db = require('../lib/db');
       db.logError({
         level: 'error',
         source: 'x-mentions.js',
