@@ -1274,6 +1274,67 @@ async function embedCommand(options) {
     }
 }
 
+/**
+ * Rerank results using Cohere Rerank API
+ * @param {string} query - The search query
+ * @param {Array} results - Array of result objects with .content
+ * @returns {Array|null} - Reranked results or null if unavailable
+ */
+async function cohereRerank(query, results) {
+    // Load Cohere API key
+    let cohereKey = null;
+    try {
+        const credsPath = path.join(process.env.HOME, '.openclaw/secrets/credentials.json');
+        if (fs.existsSync(credsPath)) {
+            const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+            cohereKey = creds.cohere_api_key;
+        }
+    } catch (e) {}
+    
+    if (!cohereKey) {
+        return null;
+    }
+    
+    // Prepare documents for Cohere
+    const documents = results.map(r => r.content.substring(0, 4000)); // Cohere has doc length limits
+    
+    try {
+        const response = await fetch('https://api.cohere.ai/v1/rerank', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${cohereKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'rerank-v3.5',
+                query: query,
+                documents: documents,
+                top_n: results.length,
+                return_documents: false
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Cohere API error: ${response.status} ${error}`);
+        }
+        
+        const data = await response.json();
+        
+        // Reorder results based on Cohere ranking
+        const rerankedResults = data.results.map(r => ({
+            ...results[r.index],
+            rerank_score: r.relevance_score
+        }));
+        
+        console.log('Reranking with Cohere...');
+        return rerankedResults;
+        
+    } catch (e) {
+        throw new Error(`Rerank failed: ${e.message}`);
+    }
+}
+
 async function searchCommand(query, options) {
     try {
         const Database = require('better-sqlite3');
@@ -1498,12 +1559,30 @@ async function searchCommand(query, options) {
         
         // Limit results
         const limit = parseInt(options.limit) || 5;
-        const topResults = combinedResults.slice(0, limit);
+        
+        // 4. Rerank top candidates with Cohere (if available)
+        let topResults = combinedResults.slice(0, Math.min(20, combinedResults.length));
+        let reranked = false;
+        
+        if (!options.noRerank && topResults.length > 1) {
+            try {
+                const rerankedResults = await cohereRerank(query, topResults);
+                if (rerankedResults) {
+                    topResults = rerankedResults;
+                    reranked = true;
+                }
+            } catch (e) {
+                console.warn('Reranking skipped:', e.message);
+            }
+        }
+        
+        // Final limit after reranking
+        topResults = topResults.slice(0, limit);
         
         // Format and display results
         console.log('');
-        console.log(`📊 Search Results (Hybrid RRF):`);
-        console.log(`Embedding matches: ${embeddingResults.length}, BM25 matches: ${bm25Results.length}`);
+        console.log(`📊 Search Results (${reranked ? 'Hybrid RRF + Cohere Rerank' : 'Hybrid RRF'}):`);
+        console.log(`Embedding matches: ${embeddingResults.length}, BM25 matches: ${bm25Results.length}${reranked ? ', Reranked: ✓' : ''}`);
         console.log('');
         
         topResults.forEach((result, index) => {
@@ -1796,6 +1875,7 @@ program
     .option('--before <date>', 'Filter by date before (YYYY-MM-DD)')
     .option('--topic <tag>', 'Filter by topic tag')
     .option('--limit <n>', 'Limit number of results (default: 5)')
+    .option('--no-rerank', 'Skip Cohere reranking')
     .action(searchCommand);
 
 if (require.main === module) {
