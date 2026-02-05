@@ -483,13 +483,22 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       }
       console.log('');
     } catch (error) {
-      db.logError({
-        source: 'content',
-        message: error.message,
-        details: 'Failed to get content statistics from database',
-        stack: error.stack
-      });
       console.error(`❌ Failed to get stats: ${error.message}`);
+      
+      // Log error to database
+      try {
+        const db = require('../lib/db');
+        db.logError({
+          level: 'error',
+          source: 'content.js',
+          message: error.message,
+          details: 'Command: stats',
+          stack: error.stack
+        });
+      } catch (dbError) {
+        console.error('Failed to log error to database:', dbError.message);
+      }
+      
       process.exit(1);
     }
   },
