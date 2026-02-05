@@ -40,9 +40,12 @@ try {
   console.log('\nEmbedding generation will use:');
   console.log('   - OpenAI if OPENAI_API_KEY is available');
   console.log('   - OpenRouter with Gemini embeddings as fallback');
-  console.log('\nTo test embedding generation:');
+  console.log('\nTo test embedding generation (returns Float32Array):');
   console.log('   node -e "const { generateEmbedding } = require(\'./lib/embeddings\');');
-  console.log('   generateEmbedding(\'test text\').then(e => console.log(\'Dimensions:\', e.length)).catch(console.error);"');
+  console.log('   generateEmbedding(\'test text\').then(e => {');
+  console.log('     console.log(\'Type:\', e.constructor.name);');
+  console.log('     console.log(\'Dimensions:\', e.length);');
+  console.log('   }).catch(console.error);"');
   
 } catch (error) {
   console.error('\n❌ Failed to load embeddings module:', error.message);

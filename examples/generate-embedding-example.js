@@ -34,6 +34,7 @@ async function main() {
     });
     
     console.log(`   Embedding generated: ${embedding.length} dimensions`);
+    console.log(`   Type: ${embedding.constructor.name}`); // Should be Float32Array
     console.log(`   First 5 values: ${Array.from(embedding.slice(0, 5)).map(v => v.toFixed(6)).join(', ')}`);
     
     // Example 2: Add a memory with embedding
