@@ -375,10 +375,17 @@ function activityShow(options = {}) {
     since,
     until,
     action,
-    search
+    search,
+    source,
+    related
   } = options;
   
   let activities;
+  
+  // Build filters for getRecentActivity
+  const filters = {};
+  if (source) filters.source = source;
+  if (related) filters.relatedId = related;
   
   // Handle different filtering scenarios
   if (since || until) {
@@ -392,9 +399,25 @@ function activityShow(options = {}) {
   } else if (category) {
     // Filter by category
     activities = activity.getActivitiesByCategory(category, limit);
+  } else if (source || related) {
+    // Use source/related filters via db directly
+    activities = db.getRecentActivity(limit, filters);
   } else {
     // Default to recent activities
     activities = activity.getRecent(limit);
+  }
+  
+  // Apply additional filters if we used a different query path
+  if ((source || related) && !(since || until || action || category)) {
+    // Already filtered
+  } else if (source || related) {
+    // Need to filter the results manually
+    if (source) {
+      activities = activities.filter(act => act.source === source);
+    }
+    if (related) {
+      activities = activities.filter(act => act.related_id === related);
+    }
   }
   
   // Apply search filter if provided
@@ -419,11 +442,15 @@ function activityShow(options = {}) {
   if (since) console.log(`  Since: ${since}`);
   if (until) console.log(`  Until: ${until}`);
   if (search) console.log(`  Search: "${search}"`);
+  if (source) console.log(`  Source: ${source}`);
+  if (related) console.log(`  Related: ${related}`);
   console.log('');
   
   for (const act of activities) {
     const categoryStr = act.category ? ` [${act.category}]` : '';
-    console.log(`  ${formatDate(act.created_at)}${categoryStr}`);
+    const sourceStr = act.source ? ` (${act.source})` : '';
+    const relatedStr = act.related_id ? ` → ${act.related_id}` : '';
+    console.log(`  ${formatDate(act.created_at)}${categoryStr}${sourceStr}${relatedStr}`);
     console.log(`    ${act.action}: ${act.description || ''}`);
     if (act.metadata) {
       try {
@@ -941,8 +968,10 @@ ERRORS
   errors resolve <id>                    Mark resolved
 
 ACTIVITY
-  activity [--limit 20] [--category <cat>] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--action <act>] [--search <text>]
+  activity [--limit 20] [--category <cat>] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--action <act>] [--search <text>] [--source <main|subagent|cron|heartbeat>] [--related <type:id>]
                                          Filtered activity log
+  activity add <cat> "desc" [--source <type>] [--related <type:id>]
+                                         Add activity with source tracking
   activity summary                       Daily summary with statistics
   activity stats [--period day|week|month] Activity statistics
 
@@ -1057,7 +1086,72 @@ try {
       break;
       
     case 'activity':
-      if (subcommand === 'summary') {
+      if (subcommand === 'add') {
+        // activity add <category> "description" [options]
+        const category = args[2];
+        const description = args[3];
+        if (!category || !description) {
+          console.log('\n📝 Activity Add\n');
+          console.log('  Usage: db.js activity add <category> "description" [options]');
+          console.log('\n  Categories: build, spawn, research, session, work, infrastructure, testing, heartbeat, api');
+          console.log('\n  Options:');
+          console.log('    --action <name>      Custom action name (default: <category>_logged)');
+          console.log('    --source <type>      Source: main, subagent, cron, heartbeat');
+          console.log('    --related <type:id>  Related entity (e.g., pipeline:8, task:15, content:3)');
+          console.log('    --meta \'{"k":"v"}\'   Arbitrary JSON metadata');
+          console.log('    --input "text"       Input/prompt summary');
+          console.log('    --output "text"      Output/response summary');
+          console.log('    --tokens "in/out"    Token counts (e.g., "5000/1200")');
+          console.log('    --cost "$0.05"       Cost of the operation');
+          console.log('    --model "name"       Model used');
+          console.log('\n  Examples:');
+          console.log('    db.js activity add spawn "Spawned vision-extractor builder"');
+          console.log('    db.js activity add build "Test" --source subagent --related pipeline:8');
+          console.log('    db.js activity add api "Vision extraction" --input "specs.pdf" --output "22 items" --tokens "50000/2000" --cost "$0.08" --model "gemini-2.5-pro"');
+          break;
+        }
+        const action = flags.action || `${category}_logged`;
+        
+        // Build metadata from flags
+        let metadata = {};
+        if (flags.meta) {
+          try {
+            metadata = JSON.parse(flags.meta);
+          } catch (e) {
+            console.error('Invalid JSON in --meta flag');
+            break;
+          }
+        }
+        if (flags.input) metadata.input = flags.input;
+        if (flags.output) metadata.output = flags.output;
+        if (flags.tokens) {
+          const [tokensIn, tokensOut] = flags.tokens.split('/');
+          metadata.tokens = { in: parseInt(tokensIn) || 0, out: parseInt(tokensOut) || 0 };
+        }
+        if (flags.cost) metadata.cost = flags.cost;
+        if (flags.model) metadata.model = flags.model;
+        
+        // Only include metadata if there's something in it
+        const finalMeta = Object.keys(metadata).length > 0 ? metadata : null;
+        
+        // Extract source and related from flags
+        const source = flags.source || null;
+        const relatedId = flags.related || null;
+        
+        activity.logFull({ action, category, description, metadata: finalMeta, source, relatedId });
+        console.log(`\n📝 Logged [${category}] ${description}`);
+        const infoParts = [];
+        if (source) infoParts.push(`source: ${source}`);
+        if (relatedId) infoParts.push(`related: ${relatedId}`);
+        if (finalMeta) {
+          if (finalMeta.model) infoParts.push(`model: ${finalMeta.model}`);
+          if (finalMeta.tokens) infoParts.push(`tokens: ${finalMeta.tokens.in}→${finalMeta.tokens.out}`);
+          if (finalMeta.cost) infoParts.push(`cost: ${finalMeta.cost}`);
+          if (finalMeta.input) infoParts.push(`in: "${finalMeta.input.substring(0, 50)}${finalMeta.input.length > 50 ? '...' : ''}"`);
+          if (finalMeta.output) infoParts.push(`out: "${finalMeta.output.substring(0, 50)}${finalMeta.output.length > 50 ? '...' : ''}"`);
+        }
+        if (infoParts.length) console.log(`   ${infoParts.join(' | ')}`);
+      } else if (subcommand === 'summary') {
         // Check if there's a description argument
         const description = args[2];
         activitySummary(description);
@@ -1071,7 +1165,9 @@ try {
           since: flags.since || null,
           until: flags.until || null,
           action: flags.action || null,
-          search: flags.search || null
+          search: flags.search || null,
+          source: flags.source || null,
+          related: flags.related || null
         };
         activityShow(options);
       }
