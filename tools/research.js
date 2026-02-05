@@ -374,6 +374,8 @@ async function main() {
   let forceDeepSeek = false;
   let urlFile = null;
   let searchQuery = null;
+  let cacheResult = false;
+  let cacheTags = [];
   
   // Parse args
   for (let i = 0; i < args.length; i++) {
@@ -385,6 +387,10 @@ async function main() {
       forceDeepSeek = true;
     } else if (args[i] === '-s' || args[i] === '--search') {
       searchQuery = args[++i];
+    } else if (args[i] === '-c' || args[i] === '--cache') {
+      cacheResult = true;
+    } else if (args[i] === '--tags') {
+      cacheTags = args[++i].split(',').map(t => t.trim());
     } else if (args[i] === '-h' || args[i] === '--help') {
       console.log(`
 Research Helper - Fetch and summarize URLs using Gemini/DeepSeek
@@ -394,12 +400,15 @@ Usage:
   node research.js -q "question" -f urls.txt
   node research.js --deepseek -q "question" url1
   node research.js -s 'search query' -q 'research question'
+  node research.js -q "question" url1 --cache --tags "ai,rag"
 
 Options:
   -q, --question   Research question (required)
   -f, --file       File containing URLs (one per line)
   -d, --deepseek   Force DeepSeek (skip Gemini)
   -s, --search     Search query for Brave Search (optional)
+  -c, --cache      Save findings to Knowledge Cache
+  --tags           Comma-separated tags for cache (with --cache)
   -h, --help       Show this help
 
 The script fetches URLs, extracts content, and summarizes using:
@@ -586,6 +595,50 @@ ${sourcesText}`;
   }
   
   console.log(result);
+  
+  // Cache to Knowledge Cache if requested
+  if (cacheResult) {
+    try {
+      const knowledge = require('../lib/knowledge');
+      
+      // Extract first URL as source
+      const sourceUrl = sources.length > 0 ? sources[0].url : null;
+      
+      // Auto-generate tags from question if none provided
+      const tags = cacheTags.length > 0 ? cacheTags : extractTags(question);
+      
+      const id = knowledge.add({
+        title: question,
+        summary: result,
+        sourceType: 'research',
+        sourceUrl: sourceUrl,
+        tags: tags,
+        confidence: 0.8  // Research findings, not verified
+      });
+      
+      console.error(`\n[Research] ✅ Cached to Knowledge Cache (ID: ${id})`);
+      console.error(`[Research]    Tags: ${tags.join(', ')}`);
+    } catch (e) {
+      console.error(`\n[Research] ⚠️ Failed to cache: ${e.message}`);
+    }
+  }
+}
+
+/**
+ * Extract simple tags from a question
+ */
+function extractTags(question) {
+  // Common stop words to filter out
+  const stopWords = new Set(['what', 'how', 'why', 'when', 'where', 'who', 'which', 'is', 'are', 'was', 'were', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'into', 'about', 'does', 'do', 'can', 'could', 'would', 'should', 'will', 'be', 'been', 'being', 'have', 'has', 'had', 'this', 'that', 'these', 'those', 'it', 'its']);
+  
+  // Extract words, filter stop words, take top 3-5
+  const words = question.toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stopWords.has(w));
+  
+  // Return unique words, max 5
+  return [...new Set(words)].slice(0, 5);
 }
 
 main();
