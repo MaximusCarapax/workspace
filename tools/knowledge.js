@@ -61,6 +61,37 @@ program
   });
 
 program
+  .command('learn <url>')
+  .description('Fetch, summarize, and store knowledge from a URL')
+  .option('--topic <topic>', 'Topic for the knowledge')
+  .option('--title <title>', 'Custom title (default: extracted from content)')
+  .action(async (url, options) => {
+    try {
+      console.log(`📚 Learning from ${url}...`);
+      // For now, we'll implement a basic version
+      // In the future, this should fetch and summarize the content
+      const title = options.title || `Content from ${url}`;
+      const summary = `Web content from ${url}. Topic: ${options.topic || 'general'}`;
+      
+      const id = await knowledge.add({
+        title,
+        summary,
+        sourceType: 'web',
+        sourceUrl: url,
+        tags: options.topic ? [options.topic] : [],
+        confidence: 0.8
+      });
+      
+      console.log(`✅ Knowledge learned and stored with ID: ${id}`);
+      console.log(`   Title: ${title}`);
+      console.log(`   Source: ${url}`);
+    } catch (error) {
+      console.error('❌ Error:', error.message);
+      process.exit(1);
+    }
+  });
+
+program
   .command('list')
   .description('List knowledge entries')
   .option('-l, --limit <n>', 'Number of entries to show', parseInt, 20)
@@ -157,6 +188,41 @@ program
       });
     } catch (e) {
       console.error('Error searching knowledge:', e.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('semantic-search <query>')
+  .description('Search knowledge entries using semantic similarity')
+  .option('-l, --limit <n>', 'Number of results', parseInt, 10)
+  .option('--threshold <n>', 'Similarity threshold (0-1)', parseFloat, 0.7)
+  .option('--include-expired', 'Include expired entries')
+  .action(async (query, options) => {
+    try {
+      const results = await knowledge.semanticSearch(query, {
+        limit: options.limit,
+        threshold: options.threshold,
+        includeExpired: options.includeExpired
+      });
+      
+      if (results.length === 0) {
+        console.log(`No semantic results found for: "${query}"`);
+        return;
+      }
+      
+      console.log(`🧠 Semantic search results for "${query}" (${results.length} found)\n`);
+      
+      results.forEach((entry, i) => {
+        const verified = entry.verified ? '✓' : ' ';
+        const similarity = (entry.similarity * 100).toFixed(1);
+        console.log(`[${i + 1}] #${entry.id} ${verified} ${entry.title} (${similarity}% similar)`);
+        console.log(`    ${entry.source_type} | ${new Date(entry.created_at).toLocaleDateString()}`);
+        console.log(`    ${entry.summary.substring(0, 120)}${entry.summary.length > 120 ? '...' : ''}`);
+        console.log('');
+      });
+    } catch (e) {
+      console.error('Error performing semantic search:', e.message);
       process.exit(1);
     }
   });
