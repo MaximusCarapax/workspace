@@ -1549,6 +1549,17 @@ MEMORY
   memory backfill-embeddings             Generate embeddings for existing memories
   memory list <category>                 List by category
 
+OBSERVATIONS (Self-Observation System)
+  observations list [--week YYYY-MM-DD] [--category <cat>] [--pending] [--limit 20]
+                                         List observations with filters
+  observations add "text" --category <cat> [--week YYYY-MM-DD] [--confidence 0.8] [--evidence '["p1","p2"]']
+                                         Add a new observation
+  observations feedback <id> <useful|not_useful> [--note "reason"]
+                                         Provide feedback on observation
+  observations stats                     Show feedback statistics
+
+  Categories: task_preference, communication, decision, error, other
+
 FRICTION
   friction add "description" [--category <cat>]  Log friction (auto-increments if similar exists)
   friction list [--all] [--category <cat>]       List unresolved friction
@@ -1586,6 +1597,149 @@ function parseFlags(args) {
 // ============================================================
 // FRICTION
 // ============================================================
+
+// ============================================================
+// OBSERVATIONS
+// ============================================================
+
+function observationsList(options = {}) {
+  const observations = db.getObservations({
+    weekStart: options.week,
+    category: options.category,
+    feedback: options.pending ? null : undefined,
+    limit: options.limit || 20
+  });
+  
+  if (observations.length === 0) {
+    console.log('\n🔭 No observations found.\n');
+    return;
+  }
+  
+  console.log('\n🔭 Self-Observations\n');
+  
+  for (const obs of observations) {
+    const feedbackEmoji = obs.feedback === 'useful' ? '👍' : 
+                          obs.feedback === 'not_useful' ? '👎' : '⏳';
+    const confidence = (obs.confidence * 100).toFixed(0);
+    
+    console.log(`  ${feedbackEmoji} [${obs.id}] ${obs.category} (${confidence}% confidence)`);
+    console.log(`      ${obs.observation}`);
+    console.log(`      Week: ${obs.week_start} | Created: ${formatDate(obs.created_at)}`);
+    if (obs.feedback_note) {
+      console.log(`      Note: ${obs.feedback_note}`);
+    }
+    if (obs.evidence && obs.evidence.length > 0) {
+      console.log(`      Evidence: ${obs.evidence.length} data points`);
+    }
+    console.log('');
+  }
+}
+
+function observationsAdd(observation, options = {}) {
+  if (!observation) {
+    console.log('Usage: observations add "observation text" --category <cat> [--week YYYY-MM-DD] [--confidence 0.8] [--evidence \'["point1","point2"]\']');
+    console.log('Categories: task_preference, communication, decision, error, other');
+    return;
+  }
+  
+  const category = options.category || 'other';
+  const validCategories = ['task_preference', 'communication', 'decision', 'error', 'other'];
+  if (!validCategories.includes(category)) {
+    console.log(`Invalid category. Must be one of: ${validCategories.join(', ')}`);
+    return;
+  }
+  
+  // Default to current week's Monday
+  let weekStart = options.week;
+  if (!weekStart) {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+    const monday = new Date(now.setDate(diff));
+    weekStart = monday.toISOString().split('T')[0];
+  }
+  
+  let evidence = null;
+  if (options.evidence) {
+    try {
+      evidence = JSON.parse(options.evidence);
+    } catch (e) {
+      console.log('Invalid JSON for --evidence. Use: \'["point1", "point2"]\'');
+      return;
+    }
+  }
+  
+  const confidence = options.confidence ? parseFloat(options.confidence) : 0.5;
+  
+  const id = db.addObservation({
+    weekStart,
+    category,
+    observation,
+    evidence,
+    confidence
+  });
+  
+  console.log(`\n🔭 Added observation #${id}`);
+  console.log(`   Category: ${category}`);
+  console.log(`   Week: ${weekStart}`);
+  console.log(`   Confidence: ${(confidence * 100).toFixed(0)}%\n`);
+}
+
+function observationsFeedback(id, feedback, note = null) {
+  if (!id || !feedback) {
+    console.log('Usage: observations feedback <id> <useful|not_useful> [--note "reason"]');
+    return;
+  }
+  
+  const validFeedback = ['useful', 'not_useful'];
+  if (!validFeedback.includes(feedback)) {
+    console.log(`Invalid feedback. Must be one of: ${validFeedback.join(', ')}`);
+    return;
+  }
+  
+  const obs = db.getObservation(parseInt(id));
+  if (!obs) {
+    console.log(`Observation #${id} not found.`);
+    return;
+  }
+  
+  db.updateObservationFeedback(parseInt(id), feedback, note);
+  
+  const emoji = feedback === 'useful' ? '👍' : '👎';
+  console.log(`\n${emoji} Marked observation #${id} as ${feedback}`);
+  if (note) {
+    console.log(`   Note: ${note}`);
+  }
+  console.log('');
+}
+
+function observationsStats() {
+  const stats = db.getObservationStats();
+  
+  console.log('\n📊 Observation Statistics\n');
+  console.log(`  Total observations: ${stats.total}`);
+  console.log(`  👍 Useful: ${stats.useful}`);
+  console.log(`  👎 Not useful: ${stats.notUseful}`);
+  console.log(`  ⏳ Pending feedback: ${stats.pending}`);
+  
+  if (stats.total > 0) {
+    const usefulRate = ((stats.useful / (stats.useful + stats.notUseful)) * 100).toFixed(0);
+    if (stats.useful + stats.notUseful > 0) {
+      console.log(`  Usefulness rate: ${usefulRate}%`);
+    }
+  }
+  
+  if (stats.byCategory.length > 0) {
+    console.log('\n  By Category:');
+    for (const cat of stats.byCategory) {
+      const catUseful = cat.useful || 0;
+      const catNotUseful = cat.not_useful || 0;
+      const catTotal = cat.count;
+      console.log(`    ${cat.category}: ${catTotal} total (${catUseful} useful, ${catNotUseful} not useful)`);
+    }
+  }
+  console.log('');
+}
 
 function frictionAdd(description, options = {}) {
   if (!description) {
@@ -2029,6 +2183,35 @@ try {
       }
       break;
     
+    case 'observations':
+      switch (subcommand) {
+        case 'list':
+          observationsList({
+            week: flags.week,
+            category: flags.category,
+            pending: flags.pending === true,
+            limit: flags.limit ? parseInt(flags.limit) : 20
+          });
+          break;
+        case 'add':
+          observationsAdd(args[2], {
+            category: flags.category,
+            week: flags.week,
+            confidence: flags.confidence,
+            evidence: flags.evidence
+          });
+          break;
+        case 'feedback':
+          observationsFeedback(args[2], args[3], flags.note);
+          break;
+        case 'stats':
+          observationsStats();
+          break;
+        default:
+          observationsList();
+      }
+      break;
+      
     case 'friction':
       switch (subcommand) {
         case 'add':
