@@ -220,8 +220,17 @@ class SessionChunker {
     }
     
     async extractTopics(content) {
-        // Simple keyword extraction as fallback
-        // TODO: Implement Gemini Flash integration
+        // Try to use Gemini if available
+        if (gemini && gemini.extractTopics) {
+            try {
+                return await gemini.extractTopics(content);
+            } catch (e) {
+                console.warn('Gemini topic extraction failed:', e.message);
+                // Fall through to keyword extraction
+            }
+        }
+        
+        // Fallback: simple keyword extraction
         const keywords = this.extractKeywords(content);
         return keywords.slice(0, 3); // Max 3 topics
     }
@@ -256,6 +265,25 @@ class SessionChunker {
         return actionWords.some(word => content.toLowerCase().includes(word));
     }
     
+    createContextContent(chunkContent, metadata) {
+        const { session_id, timestamp, speakers, topic_tags } = metadata;
+        const date = new Date(timestamp).toLocaleString('en-US', {
+            timeZone: 'Australia/Melbourne',
+            dateStyle: 'full',
+            timeStyle: 'short'
+        });
+        
+        const speakerNames = speakers.map(s => s === 'user' ? 'Jason' : 'Max').join(' and ');
+        const topics = topic_tags ? topic_tags.join(', ') : 'general discussion';
+        
+        return `[Session from ${date} Melbourne time]
+[Participants: ${speakerNames}]
+[Topics: ${topics}]
+[Context: Exchange about ${topic_tags && topic_tags.length > 0 ? topic_tags[0] : 'various topics'}]
+
+${chunkContent}`;
+    }
+    
     async processSession(sessionId, sessionData) {
         console.log(`Processing session: ${sessionId}`);
         
@@ -278,6 +306,14 @@ class SessionChunker {
                 const hasDecision = this.detectDecisions(chunk.content);
                 const hasAction = this.detectActions(chunk.content);
                 
+                // Create context content
+                const contextContent = this.createContextContent(chunk.content, {
+                    session_id: sessionId,
+                    timestamp: chunk.timestamp,
+                    speakers: chunk.speakers,
+                    topic_tags: topicTags
+                });
+                
                 const chunkData = {
                     session_id: sessionId,
                     chunk_index: chunk.chunk_index,
@@ -287,6 +323,7 @@ class SessionChunker {
                     has_decision: hasDecision ? 1 : 0,
                     has_action: hasAction ? 1 : 0,
                     content: chunk.content,
+                    context_content: contextContent,
                     token_count: chunk.token_count
                 };
                 
@@ -315,7 +352,7 @@ async function createTables() {
     const Database = require('better-sqlite3');
     const sqlite = new Database(dbPath);
     
-    // Create session_chunks table
+    // Create session_chunks table with all required columns from spec
     sqlite.exec(`
         CREATE TABLE IF NOT EXISTS session_chunks (
             id INTEGER PRIMARY KEY,
@@ -327,9 +364,23 @@ async function createTables() {
             has_decision INTEGER DEFAULT 0,
             has_action INTEGER DEFAULT 0,
             content TEXT NOT NULL,
+            context_content TEXT,
             token_count INTEGER,
+            embedding BLOB,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(session_id, chunk_index)
+        )
+    `);
+    
+    // Create session_index_state table for tracking
+    sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS session_index_state (
+            session_id TEXT PRIMARY KEY,
+            file_path TEXT NOT NULL,
+            file_hash TEXT NOT NULL,
+            last_indexed DATETIME NOT NULL,
+            chunk_count INTEGER NOT NULL,
+            status TEXT NOT NULL
         )
     `);
     
@@ -415,8 +466,8 @@ async function processSessionFile(chunker, sessionId, filepath) {
     // Insert new chunks
     const insertStmt = sqlite.prepare(`
         INSERT INTO session_chunks 
-        (session_id, chunk_index, timestamp, speakers, topic_tags, has_decision, has_action, content, token_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (session_id, chunk_index, timestamp, speakers, topic_tags, has_decision, has_action, content, context_content, token_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     for (const chunk of chunks) {
@@ -429,6 +480,7 @@ async function processSessionFile(chunker, sessionId, filepath) {
             chunk.has_decision,
             chunk.has_action,
             chunk.content,
+            chunk.context_content || chunk.content, // Fallback to regular content if context not available
             chunk.token_count
         );
     }
@@ -513,6 +565,11 @@ program
     .command('status')
     .description('Show indexing status and statistics')
     .action(statusCommand);
+
+program
+    .command('health')
+    .description('Show health status of session memory system')
+    .action(healthCommand);
 
 if (require.main === module) {
     program.parse();
