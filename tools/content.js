@@ -316,6 +316,60 @@ Return JSON: {"hook_score": N, "clarity_score": N, "value_score": N, "cta_score"
         console.log('Consider revising the draft or creating a new one.');
       }
     });
+    return;
+    }
+    
+    // If no ID provided, list items needing review (original behavior)
+    const data = loadData();
+    
+    // Items needing review: have draft content but no scores, or scored below threshold
+    const needsReview = data.items.filter(i => {
+      if (i.status === 'draft' && i.content && !i.scores && !i.review_score) return true;
+      if (i.scores && totalScore(i.scores) < MIN_SCORE) return true;
+      if (i.review_score && i.review_score < 7) return true;
+      return false;
+    });
+    
+    // Items ready to schedule: reviewed but not scheduled
+    const readyToSchedule = data.items.filter(i => 
+      (i.status === 'reviewed' && !i.scheduledFor) || 
+      (i.review_score && i.review_score >= 7 && i.status !== 'scheduled')
+    );
+    
+    if (needsReview.length === 0 && readyToSchedule.length === 0) {
+      console.log('✨ No items need review!');
+      return;
+    }
+    
+    if (needsReview.length > 0) {
+      console.log(`\n🔍 NEEDS REVIEW (${needsReview.length})`);
+      console.log('─'.repeat(60));
+      needsReview.forEach(i => {
+        let scoreStr = 'unscored';
+        if (i.scores) {
+          scoreStr = `${totalScore(i.scores)}/25 ⚠️`;
+        } else if (i.review_score) {
+          scoreStr = `${i.review_score}/10 ${i.review_score >= 7 ? '✅' : '⚠️'}`;
+        }
+        console.log(`  ${i.id} ${platformEmoji(i.platform)} ${truncate(i.hook, 40)} [${scoreStr}]`);
+      });
+    }
+    
+    if (readyToSchedule.length > 0) {
+      console.log(`\n📅 READY TO SCHEDULE (${readyToSchedule.length})`);
+      console.log('─'.repeat(60));
+      readyToSchedule.forEach(i => {
+        let scoreStr = '';
+        if (i.scores) {
+          const score = totalScore(i.scores);
+          scoreStr = `[${score}/25 ✅]`;
+        } else if (i.review_score) {
+          scoreStr = `[${i.review_score}/10 ✅]`;
+        }
+        console.log(`  ${i.id} ${platformEmoji(i.platform)} ${truncate(i.hook, 40)} ${scoreStr}`);
+      });
+    }
+    console.log('');
   },
   
   score: () => {
@@ -511,6 +565,15 @@ Return JSON: {"hook_score": N, "clarity_score": N, "value_score": N, "cta_score"
     console.log('\nHook/Idea:');
     console.log(item.hook || '(none)');
     
+    // Show all hooks if they exist
+    if (item.hooks && item.hooks.length > 1) {
+      console.log('\nAll Hooks:');
+      item.hooks.forEach((h, idx) => {
+        const marker = idx === item.selectedHook ? '✅' : '  ';
+        console.log(`${marker} ${idx + 1}. ${h}`);
+      });
+    }
+    
     if (item.content) {
       console.log('\nFull Draft:');
       console.log(item.content);
@@ -553,7 +616,16 @@ Return JSON: {"hook_score": N, "clarity_score": N, "value_score": N, "cta_score"
     const notes = getFlag('--notes');
     const tags = getFlag('--tags');
     
-    if (hook) item.hook = hook;
+    if (hook) {
+      item.hook = hook;
+      // Update the selected hook in hooks array
+      if (item.hooks && item.hooks.length > 0) {
+        item.hooks[item.selectedHook] = hook;
+      } else {
+        item.hooks = [hook];
+        item.selectedHook = 0;
+      }
+    }
     if (content) item.content = content;
     if (status) item.status = status;
     if (platform) item.platform = platform;
