@@ -16,6 +16,19 @@
  * Cost: Gemini ~$0.10/M via OpenRouter, DeepSeek ~$0.27/M
  */
 
+// Check for required dependencies before using them
+try {
+  require('jsdom');
+  require('@mozilla/readability');
+} catch (e) {
+  console.error('Missing required dependencies.');
+  console.error('Please install them by running:');
+  console.error('  npm install jsdom @mozilla/readability');
+  console.error('Or from the project root:');
+  console.error('  npm install');
+  process.exit(1);
+}
+
 const https = require('https');
 const http = require('http');
 const fs = require('fs');
