@@ -1101,7 +1101,7 @@ try {
           (async () => {
             await memorySemanticSearch(args[2], {
               limit: flags.limit ? parseInt(flags.limit) : 10,
-              threshold: flags.threshold ? parseFloat(flags.threshold) : 0.7
+              threshold: flags.threshold ? parseFloat(flags.threshold) : 0.4
             });
           })().catch(console.error);
           break;
