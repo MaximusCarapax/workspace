@@ -483,8 +483,6 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       }
       console.log('');
     } catch (error) {
-      console.error(`❌ Failed to get stats: ${error.message}`);
-      
       // Log error to database
       try {
         db.logError({
@@ -498,6 +496,7 @@ Return as JSON array: ["hook1", "hook2", ...]`;
         console.error('Failed to log error to database:', dbError.message);
       }
       
+      console.error(`❌ Failed to get stats: ${error.message}`);
       process.exit(1);
     }
   },
