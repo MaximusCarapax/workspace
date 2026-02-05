@@ -18,35 +18,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const db = require('../lib/db');
 
-const DATA_FILE = path.join(__dirname, '..', 'dashboard', 'data', 'content.json');
 const MIN_SCORE = 15; // Minimum score (out of 25) to be schedulable
-
-// Ensure data directory exists
-const dataDir = path.dirname(DATA_FILE);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// Load data
-function loadData() {
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch (e) {
-    return { items: [], lastId: 0 };
-  }
-}
-
-// Save data
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-
-// Generate short ID
-function genId(data) {
-  data.lastId = (data.lastId || 0) + 1;
-  return `C${data.lastId.toString().padStart(3, '0')}`;
-}
 
 // Parse args
 const args = process.argv.slice(2);
@@ -235,12 +209,8 @@ Keep it punchy. No fluff.`;
   review: () => {
     const id = args[1];
     
-    if (!id) {
-      console.log('Usage: content review <id>');
-      console.log('');
-      console.log('AI will score the draft against 5 criteria and provide feedback.');
-      process.exit(1);
-    }
+    // If ID is provided, do AI review of specific item
+    if (id) {
     
     const data = loadData();
     const item = data.items.find(i => i.id.toLowerCase() === id.toLowerCase());
