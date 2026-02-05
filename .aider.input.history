@@ -248,3 +248,27 @@
 
 # 2026-02-05 00:02:24.584434
 +2. Create `generateEmbedding` function that calls OpenAI text-embedding-3-small API
+
+# 2026-02-05 00:06:33.455824
++   - Use credentials: `require('./lib/credentials').get('openai')`
+
+# 2026-02-05 00:07:39.798764
++   - If no OpenAI key, fall back to Gemini embeddings via OpenRouter
+
+# 2026-02-05 00:09:57.072856
++   - Return Float32Array embedding vector
+
+# 2026-02-05 00:11:17.401201
++3. Add `semanticSearchMemory` function using cosine similarity
+
+# 2026-02-05 00:12:40.697989
++   - Take query string, generate embedding, find most similar memories
+
+# 2026-02-05 00:13:59.706806
++   - Return results with similarity scores
+
+# 2026-02-05 00:14:59.310046
++4. Export the new functions
+
+# 2026-02-05 00:16:32.441699
++5. Update addMemory to optionally generate and store embeddings
