@@ -53,22 +53,6 @@ if (!BRAVE_API_KEY) {
   } catch (e) {}
 }
 
-// Validate API keys
-if (!forceDeepSeek) {
-  if (!OPENROUTER_KEY || OPENROUTER_KEY.trim() === '') {
-    console.error('Warning: OPENROUTER_API_KEY is empty or not set. Will try DeepSeek if available.');
-  }
-} else {
-  if (!DEEPSEEK_KEY || DEEPSEEK_KEY.trim() === '') {
-    console.error('Error: DEEPSEEK_API_KEY is required when forcing DeepSeek but not found or empty.');
-    process.exit(1);
-  }
-}
-
-if ((!OPENROUTER_KEY || OPENROUTER_KEY.trim() === '') && (!DEEPSEEK_KEY || DEEPSEEK_KEY.trim() === '')) {
-  console.error('Error: No valid API keys found. Set OPENROUTER_API_KEY or DEEPSEEK_API_KEY in .env');
-  process.exit(1);
-}
 
 // Config
 const MAX_CHARS_PER_PAGE = 4000;
@@ -382,6 +366,23 @@ Max ${MAX_CHARS_PER_PAGE} chars per page, ${MAX_TOTAL_CHARS} total.
     urls = [...urls, ...fileUrls];
   }
   
+  // Validate API keys based on whether we're forcing DeepSeek
+  if (!forceDeepSeek) {
+    if (!OPENROUTER_KEY || OPENROUTER_KEY.trim() === '') {
+      console.error('Warning: OPENROUTER_API_KEY is empty or not set. Will try DeepSeek if available.');
+    }
+  } else {
+    if (!DEEPSEEK_KEY || DEEPSEEK_KEY.trim() === '') {
+      console.error('Error: DEEPSEEK_API_KEY is required when forcing DeepSeek but not found or empty.');
+      process.exit(1);
+    }
+  }
+
+  if ((!OPENROUTER_KEY || OPENROUTER_KEY.trim() === '') && (!DEEPSEEK_KEY || DEEPSEEK_KEY.trim() === '')) {
+    console.error('Error: No valid API keys found. Set OPENROUTER_API_KEY or DEEPSEEK_API_KEY in .env');
+    process.exit(1);
+  }
+
   if (!question) {
     console.error('Error: Question required. Use -q "your question"');
     process.exit(1);
