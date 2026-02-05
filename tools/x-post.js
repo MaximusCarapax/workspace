@@ -169,6 +169,12 @@ async function postTweet(text, options = {}) {
       text: validated
     };
   } catch (e) {
+    db.logError({
+      source: 'x-post',
+      message: e.message,
+      details: 'Failed to post tweet via X API',
+      stack: e.stack
+    });
     console.error('❌ Failed to post:', e.message);
     if (e.data) {
       console.error('API Error:', JSON.stringify(e.data, null, 2));
@@ -230,6 +236,12 @@ async function postThread(tweets, options = {}) {
         await new Promise(r => setTimeout(r, 1000));
       }
     } catch (e) {
+      db.logError({
+        source: 'x-post',
+        message: e.message,
+        details: `Failed to post tweet ${i + 1} of thread`,
+        stack: e.stack
+      });
       console.error(`❌ Failed at tweet ${i + 1}:`, e.message);
       console.log('Posted so far:', posted.length);
       throw e;
@@ -252,6 +264,12 @@ async function deleteTweet(tweetId) {
     console.log(`🗑️  Deleted tweet: ${tweetId}`);
     return { success: true, deleted: tweetId };
   } catch (e) {
+    db.logError({
+      source: 'x-post',
+      message: e.message,
+      details: `Failed to delete tweet: ${tweetId}`,
+      stack: e.stack
+    });
     console.error('❌ Failed to delete:', e.message);
     throw e;
   }
@@ -369,22 +387,13 @@ Free Tier Limits (2025):
 `);
     }
   } catch (e) {
+    db.logError({
+      source: 'x-post',
+      message: e.message,
+      details: `X-post CLI command failed: ${command}`,
+      stack: e.stack
+    });
     console.error('❌ Error:', e.message);
-    
-    // Log error to database
-    try {
-      const db = require('../lib/db');
-      db.logError({
-        level: 'error',
-        source: 'x-post.js',
-        message: e.message,
-        details: `Command: ${command}`,
-        stack: e.stack
-      });
-    } catch (dbError) {
-      console.error('Failed to log error to database:', dbError.message);
-    }
-    
     process.exit(1);
   }
 }

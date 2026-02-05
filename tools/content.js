@@ -483,6 +483,12 @@ Return as JSON array: ["hook1", "hook2", ...]`;
       }
       console.log('');
     } catch (error) {
+      db.logError({
+        source: 'content',
+        message: error.message,
+        details: 'Failed to get content statistics from database',
+        stack: error.stack
+      });
       console.error(`❌ Failed to get stats: ${error.message}`);
       process.exit(1);
     }
