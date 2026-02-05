@@ -34,3 +34,19 @@ Use `memory_search` tool to find relevant information from the knowledge base.
 - Commit after logical steps
 - Clear commit messages
 - Don't leave uncommitted changes
+
+**⚠️ PARALLEL BUILD WARNING:**
+Multiple sub-agents CANNOT safely edit the same file in parallel.
+- Each edit creates a race condition
+- Later saves overwrite earlier changes
+- Results in inconsistent/broken code
+
+**If your task touches files another builder might edit:**
+1. Check the spec for file ownership/partition
+2. If unclear, assume sequential execution required
+3. Report conflicts early rather than proceeding
+
+**Orchestrator responsibility (for spec writers):**
+- Partition features by FILE, not by feature
+- Or mark task as SEQUENTIAL (one builder at a time)
+- If a feature touches shared files, it gets one builder
