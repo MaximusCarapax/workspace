@@ -37,28 +37,62 @@ async function main() {
     console.log(`   Type: ${embedding.constructor.name}`); // Should be Float32Array
     console.log(`   First 5 values: ${Array.from(embedding.slice(0, 5)).map(v => v.toFixed(6)).join(', ')}`);
     
-    // Example 2: Add a memory with embedding
-    console.log('\n2. Adding memory with embedding ---');
-    const memoryId = db.addMemory({
+    // Example 2: Add a memory without embedding
+    console.log('\n2. Adding memory without embedding ---');
+    const memoryId1 = await db.addMemory({
       category: 'fact',
-      subject: 'Example',
+      subject: 'Example 1',
       content: text,
       importance: 5,
-      source: 'example'
+      source: 'example',
+      generateEmbedding: false
     });
     
-    console.log(`   Memory created with ID: ${memoryId}`);
+    console.log(`   Memory created with ID: ${memoryId1} (no embedding)`);
     
-    // Generate and store embedding for this memory
-    // Use the generateAndStoreEmbedding function from db.js
-    const result = await db.generateAndStoreEmbedding(memoryId, {
+    // Example 3: Add a memory with automatic embedding generation
+    console.log('\n3. Adding memory with automatic embedding generation ---');
+    const memoryId2 = await db.addMemory({
+      category: 'fact',
+      subject: 'Example 2',
+      content: 'A lazy dog sleeps in the sun while a fox runs by',
+      importance: 7,
+      source: 'example',
+      generateEmbedding: true,
+      embeddingOptions: {
+        model: 'text-embedding-3-small',
+        sessionId: 'example-session',
+        source: 'example'
+      }
+    });
+    
+    console.log(`   Memory created with ID: ${memoryId2} (embedding generated automatically)`);
+    
+    // Verify the embedding was stored
+    const embeddingDirect = db.getMemoryEmbeddingDirect(memoryId2);
+    if (embeddingDirect) {
+      console.log(`   Embedding dimensions: ${embeddingDirect.length}`);
+    }
+    
+    // Example 4: Add a memory with provided embedding
+    console.log('\n4. Adding memory with provided embedding ---');
+    const customEmbedding = await db.generateEmbedding('Custom pre-generated embedding text', {
       model: 'text-embedding-3-small',
       sessionId: 'example-session',
       source: 'example'
     });
     
-    console.log(`   Embedding stored for memory ${result.memoryId}`);
-    console.log(`   Model: ${result.model}, Dimensions: ${result.dimensions}`);
+    const memoryId3 = await db.addMemory({
+      category: 'preference',
+      subject: 'Example 3',
+      content: 'I prefer using embeddings for semantic search',
+      importance: 8,
+      source: 'example',
+      embedding: customEmbedding,
+      generateEmbedding: false
+    });
+    
+    console.log(`   Memory created with ID: ${memoryId3} (with provided embedding)`);
     
     // Example 3: Test getEmbeddingDimensions
     console.log('\n3. Testing getEmbeddingDimensions ---');

@@ -72,6 +72,9 @@ try {
   console.log('\nEmbedding generation will use:');
   console.log('   - OpenAI if OPENAI_API_KEY is available');
   console.log('   - OpenRouter with Gemini embeddings as fallback');
+  console.log('\nNew addMemory features:');
+  console.log('   - generateEmbedding: true to auto-generate embeddings');
+  console.log('   - embeddingOptions: customize embedding generation');
   console.log('\nTo test embedding generation (returns Float32Array):');
   console.log('   node -e "const db = require(\'./lib/db\');');
   console.log('   db.generateEmbedding(\'test text\').then(e => {');
@@ -87,6 +90,19 @@ try {
   console.log('   db.generateEmbeddingsBatch([\'text1\', \'text2\']).then(embeddings => {');
   console.log('     console.log(\'Generated\', embeddings.length, \'embeddings\');');
   console.log('   }).catch(console.error);"');
+  
+  console.log('\nTo test addMemory with auto-embedding:');
+  console.log('   node -e "');
+  console.log('   const db = require(\'./lib/db\');');
+  console.log('   db.addMemory({');
+  console.log('     category: \'test\',');
+  console.log('     subject: \'Test\',');
+  console.log('     content: \'Test content\',');
+  console.log('     importance: 5,');
+  console.log('     source: \'test\',');
+  console.log('     generateEmbedding: true');
+  console.log('   }).then(id => console.log(\'Created memory with ID:\', id))');
+  console.log('   .catch(console.error);"');
   
 } catch (error) {
   console.error('\n❌ Failed to load embeddings module:', error.message);

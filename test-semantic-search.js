@@ -13,27 +13,53 @@ async function testSemanticSearch() {
     console.log(`1. Found ${memoriesWithEmbeddings.length} memories with embeddings`);
     
     if (memoriesWithEmbeddings.length === 0) {
-      console.log('   No memories with embeddings found. Creating a test memory...');
+      console.log('   No memories with embeddings found. Creating test memories...');
       
-      // Create a test memory
-      const testMemoryId = db.addMemory({
+      // Create a test memory without embedding
+      const testMemoryId1 = await db.addMemory({
         category: 'fact',
-        subject: 'Test Animal',
+        subject: 'Test Animal 1',
         content: 'A quick brown fox jumps over a lazy dog in the forest.',
         importance: 5,
-        source: 'test'
+        source: 'test',
+        generateEmbedding: false
       });
       
-      console.log(`   Created memory with ID: ${testMemoryId}`);
+      console.log(`   Created memory without embedding: ID ${testMemoryId1}`);
       
-      // Generate embedding for it
-      await db.generateAndStoreEmbedding(testMemoryId, {
-        model: 'text-embedding-3-small',
-        sessionId: 'test-session',
-        source: 'test'
+      // Create a test memory with automatic embedding generation
+      const testMemoryId2 = await db.addMemory({
+        category: 'fact',
+        subject: 'Test Animal 2',
+        content: 'Foxes are quick and agile animals that can jump high fences.',
+        importance: 6,
+        source: 'test',
+        generateEmbedding: true,
+        embeddingOptions: {
+          model: 'text-embedding-3-small',
+          sessionId: 'test-session',
+          source: 'test'
+        }
       });
       
-      console.log('   Generated embedding for test memory');
+      console.log(`   Created memory with auto-embedding: ID ${testMemoryId2}`);
+      
+      // Create another memory with different content
+      const testMemoryId3 = await db.addMemory({
+        category: 'lesson',
+        subject: 'Programming Tip',
+        content: 'Always write tests for your code to ensure it works correctly.',
+        importance: 8,
+        source: 'test',
+        generateEmbedding: true,
+        embeddingOptions: {
+          model: 'text-embedding-3-small',
+          sessionId: 'test-session',
+          source: 'test'
+        }
+      });
+      
+      console.log(`   Created memory with auto-embedding: ID ${testMemoryId3}`);
     }
     
     // Test semantic search with a query similar to the memory content
