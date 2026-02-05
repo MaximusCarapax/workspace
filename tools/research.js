@@ -53,8 +53,20 @@ if (!BRAVE_API_KEY) {
   } catch (e) {}
 }
 
-if (!OPENROUTER_KEY && !DEEPSEEK_KEY) {
-  console.error('Error: No API keys found. Set OPENROUTER_API_KEY or DEEPSEEK_API_KEY in .env');
+// Validate API keys
+if (!forceDeepSeek) {
+  if (!OPENROUTER_KEY || OPENROUTER_KEY.trim() === '') {
+    console.error('Warning: OPENROUTER_API_KEY is empty or not set. Will try DeepSeek if available.');
+  }
+} else {
+  if (!DEEPSEEK_KEY || DEEPSEEK_KEY.trim() === '') {
+    console.error('Error: DEEPSEEK_API_KEY is required when forcing DeepSeek but not found or empty.');
+    process.exit(1);
+  }
+}
+
+if ((!OPENROUTER_KEY || OPENROUTER_KEY.trim() === '') && (!DEEPSEEK_KEY || DEEPSEEK_KEY.trim() === '')) {
+  console.error('Error: No valid API keys found. Set OPENROUTER_API_KEY or DEEPSEEK_API_KEY in .env');
   process.exit(1);
 }
 
@@ -221,10 +233,17 @@ async function callGemini(prompt) {
           const json = JSON.parse(data);
           if (json.error) {
             // Check if it's a quota/rate error
-            if (json.error.code === 429 || json.error.message?.includes('quota') || json.error.message?.includes('rate')) {
+            const errorMessage = json.error.message || JSON.stringify(json.error);
+            const errorCode = json.error.code;
+            if (errorCode === 429 || 
+                errorMessage.includes('quota') || 
+                errorMessage.includes('rate') ||
+                errorMessage.includes('limit') ||
+                errorMessage.includes('exceeded') ||
+                errorCode === 'insufficient_quota') {
               reject(new Error('QUOTA_EXCEEDED'));
             } else {
-              reject(new Error(json.error.message || JSON.stringify(json.error)));
+              reject(new Error(errorMessage));
             }
           } else if (json.choices && json.choices[0]) {
             resolve(json.choices[0].message.content);
@@ -465,16 +484,31 @@ ${sourcesText}`;
   console.log(result);
 }
 
-// Check for required dependencies
-try {
-  require('jsdom');
-  require('@mozilla/readability');
-} catch (e) {
-  console.error('Installing required dependencies...');
-  require('child_process').execSync('npm install jsdom @mozilla/readability', { 
-    stdio: 'inherit',
-    cwd: __dirname 
-  });
+// Check for required dependencies before using them
+function checkDependencies() {
+  try {
+    require('jsdom');
+    require('@mozilla/readability');
+    return true;
+  } catch (e) {
+    console.error('Missing required dependencies. Installing...');
+    try {
+      require('child_process').execSync('npm install jsdom @mozilla/readability', { 
+        stdio: 'inherit',
+        cwd: __dirname 
+      });
+      console.error('Dependencies installed successfully.');
+      return true;
+    } catch (installError) {
+      console.error('Failed to install dependencies:', installError.message);
+      console.error('Please run: npm install jsdom @mozilla/readability');
+      return false;
+    }
+  }
+}
+
+if (!checkDependencies()) {
+  process.exit(1);
 }
 
 main().catch(e => {
