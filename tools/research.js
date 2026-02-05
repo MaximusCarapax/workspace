@@ -242,6 +242,17 @@ async function callGemini(prompt) {
             // Check if it's a quota/rate error
             const errorMessage = json.error.message || JSON.stringify(json.error);
             const errorCode = json.error.code;
+            
+            // Check for auth-related errors even if status code isn't 401/403
+            if (errorMessage.includes('auth') || 
+                errorMessage.includes('unauthorized') || 
+                errorMessage.includes('invalid key') ||
+                errorMessage.includes('permission') ||
+                errorMessage.includes('forbidden')) {
+              reject(new Error('AUTH_ERROR: ' + errorMessage));
+              return;
+            }
+            
             if (errorCode === 429 || 
                 errorMessage.includes('quota') || 
                 errorMessage.includes('rate') ||
