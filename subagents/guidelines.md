@@ -2,7 +2,7 @@
 
 **Cost consciousness:**
 - Delegate coding to DeepSeek via aider (~$0.27/M tokens)
-- Delegate summarization to Gemini via `node tools/gemini.js` (~$0.10/M)
+- Delegate summarization to Gemini 2.5-flash-lite via `node tools/gemini.js` (~$0.10/M)
 - Use your own reasoning for planning and review only
 
 **Aider usage (for coding):**
