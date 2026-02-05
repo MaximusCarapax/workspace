@@ -73,6 +73,9 @@ async function main() {
     
     // Example 4: Semantic search using text query
     console.log('\n4. Semantic search using text query ---');
+    console.log('   This function takes a query string, generates an embedding for it,');
+    console.log('   and finds the most similar memories using cosine similarity.');
+    
     const semanticQuery = "fast animal jumping over a sleeping dog";
     console.log(`   Query: "${semanticQuery}"`);
     
@@ -87,7 +90,26 @@ async function main() {
     console.log(`   Found ${semanticResults.length} semantically similar memories`);
     if (semanticResults.length > 0) {
       console.log(`   Best match similarity: ${(semanticResults[0].similarity * 100).toFixed(1)}%`);
+      console.log(`   Memory content: ${semanticResults[0].content.substring(0, 80)}...`);
     }
+    
+    // Example 5: Another semantic search example
+    console.log('\n5. Another semantic search example ---');
+    const semanticQuery2 = "wildlife in the forest";
+    console.log(`   Query: "${semanticQuery2}"`);
+    
+    const semanticResults2 = await db.semanticSearchMemory(semanticQuery2, {
+      model: 'text-embedding-3-small',
+      limit: 2,
+      threshold: 0.5,
+      sessionId: 'example-session',
+      source: 'example'
+    });
+    
+    console.log(`   Found ${semanticResults2.length} results`);
+    semanticResults2.forEach((result, i) => {
+      console.log(`   ${i + 1}. Similarity: ${(result.similarity * 100).toFixed(1)}%`);
+    });
     
     console.log('\n✅ All examples completed successfully!');
     

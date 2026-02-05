@@ -36,7 +36,7 @@ async function testSemanticSearch() {
       console.log('   Generated embedding for test memory');
     }
     
-    // Test semantic search
+    // Test semantic search with a query similar to the memory content
     console.log('\n2. Testing semantic search with query: "fast fox jumping"');
     const results = await db.semanticSearchMemory('fast fox jumping', {
       model: 'text-embedding-3-small',
@@ -59,7 +59,7 @@ async function testSemanticSearch() {
       console.log('   No results found. Try lowering the threshold.');
     }
     
-    // Test with different query
+    // Test with a different query that should still be somewhat related
     console.log('\n3. Testing semantic search with query: "sleeping animal"');
     const results2 = await db.semanticSearchMemory('sleeping animal', {
       model: 'text-embedding-3-small',
@@ -71,7 +71,21 @@ async function testSemanticSearch() {
     
     console.log(`   Found ${results2.length} results`);
     
+    // Test with an unrelated query
+    console.log('\n4. Testing semantic search with unrelated query: "programming computer science"');
+    const results3 = await db.semanticSearchMemory('programming computer science', {
+      model: 'text-embedding-3-small',
+      limit: 5,
+      threshold: 0.1, // Very low threshold to see if anything matches
+      sessionId: 'test-session',
+      source: 'test'
+    });
+    
+    console.log(`   Found ${results3.length} results with low threshold`);
+    
     console.log('\n✅ Semantic search test completed!');
+    console.log('\nSummary: semanticSearchMemory takes a query string, generates an embedding,');
+    console.log('and finds the most similar memories using cosine similarity.');
     
   } catch (error) {
     console.error('\n❌ Error:', error.message);
