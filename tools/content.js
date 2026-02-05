@@ -544,8 +544,6 @@ try {
     process.exit(1);
   }
 } catch (error) {
-  console.error(`❌ Error: ${error.message}`);
-    
   // Log error to database
   try {
     db.logError({
@@ -559,5 +557,6 @@ try {
     console.error('Failed to log error to database:', dbError.message);
   }
     
+  console.error(`❌ Error: ${error.message}`);
   process.exit(1);
 }
