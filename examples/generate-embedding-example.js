@@ -7,15 +7,22 @@ const db = require('../lib/db');
 
 async function main() {
   try {
-    // First, check if OpenAI credentials are available
+    // First, check if any embedding credentials are available
     const credentials = require('../lib/credentials');
-    if (!credentials.has('openai')) {
-      console.error('❌ OpenAI API key not found. Please set OPENAI_API_KEY in your .env file');
-      console.error('   You can also check available credentials with: node -e "console.log(require(\'./lib/credentials\').list())"');
+    const hasOpenAI = credentials.has('openai');
+    const hasOpenRouter = credentials.has('openrouter');
+    
+    if (!hasOpenAI && !hasOpenRouter) {
+      console.error('❌ No embedding API keys found.');
+      console.error('   Please set either OPENAI_API_KEY or OPENROUTER_API_KEY in your .env file');
+      console.error('   You can check available credentials with: node -e "console.log(require(\'./lib/credentials\').list())"');
       process.exit(1);
     }
     
-    console.log('✅ OpenAI credentials available\n');
+    console.log('✅ Embedding credentials available:');
+    if (hasOpenAI) console.log('   - OpenAI');
+    if (hasOpenRouter) console.log('   - OpenRouter (fallback)');
+    console.log();
     
     // Example 1: Generate embedding for a text
     const text = "The quick brown fox jumps over the lazy dog";
