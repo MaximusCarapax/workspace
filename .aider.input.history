@@ -874,3 +874,107 @@
 
 # 2026-02-05 12:52:37.456651
 +Build a complete session memory CLI tool for chunking and indexing OpenClaw session JSONL files.
+
+# 2026-02-05 13:01:30.626495
++I need to implement Story #635: Contextual Embedding Pipeline. Based on the spec in specs/session-memory-rag.md, please add the following to the existing tools/session-memory.js:
+
+# 2026-02-05 13:02:28.034662
++I need to add the embedding functionality from Story #635. Based on the spec in specs/session-memory-rag.md, I need to:
++
++1. Set up sqlite-vec extension for vector storage
++2. Create the virtual table for embeddings using sqlite-vec 
++3. Add embed command that:
++   - Reads chunks from session_chunks table
++   - Calls OpenAI text-embedding-3-small API for each context_content
++   - Stores embeddings in sqlite-vec virtual table
++   - Only embeds chunks that don't have embeddings yet (incremental)
++
++4. Use OpenAI API key from credentials: require('./lib/credentials').get('openai')
++5. Add CLI commands for: embed --all, embed --session <id>, embed --status
++
++The contextual content creation is already implemented in createContextContent method. I need the embedding generation and storage using sqlite-vec extension.
+
+# 2026-02-05 13:02:28.034735
++I need to add the embedding functionality from Story #635. Based on the spec in specs/session-memory-rag.md, I need to:
++
++1. Set up sqlite-vec extension for vector storage
++2. Create the virtual table for embeddings using sqlite-vec 
++3. Add embed command that:
++   - Reads chunks from session_chunks table
++   - Calls OpenAI text-embedding-3-small API for each context_content
++   - Stores embeddings in sqlite-vec virtual table
++   - Only embeds chunks that don't have embeddings yet (incremental)
++
++4. Use OpenAI API key from credentials: require('./lib/credentials').get('openai')
++5. Add CLI commands for: embed --all, embed --session <id>, embed --status
++
++The contextual content creation is already implemented in createContextContent method. I need the embedding generation and storage using sqlite-vec extension.
+
+# 2026-02-05 13:05:19.588380
++1. Install and integrate sqlite-vec extension for vector storage
+
+# 2026-02-05 13:05:19.625153
++2. Add embedding generation using OpenAI text-embedding-3-small API  
+
+# 2026-02-05 13:05:19.650343
++3. Create virtual table for embeddings using sqlite-vec
+
+# 2026-02-05 13:05:19.666526
++4. Add embed command that:
+
+# 2026-02-05 13:05:19.687136
++   - Reads chunks from session_chunks table
+
+# 2026-02-05 13:05:19.724348
++   - Builds contextual content (buildContextualContent function already exists)
+
+# 2026-02-05 13:05:19.744560
++   - Calls OpenAI embedding API
+
+# 2026-02-05 13:05:19.923915
++   - Stores embeddings in sqlite-vec virtual table
+
+# 2026-02-05 13:05:19.940291
++   - Tracks which chunks have embeddings
+
+# 2026-02-05 13:05:19.961740
++5. Add incremental embedding support (only embed chunks without embeddings)
+
+# 2026-02-05 13:05:19.980173
++6. Add file hash tracking for change detection
+
+# 2026-02-05 13:05:19.994456
++/run node tools/session-memory.js chunk --all
+
+# 2026-02-05 13:05:19.994516
++/run node tools/session-memory.js chunk --all
+
+# 2026-02-05 13:05:20.251650
++/run node tools/session-memory.js status
+
+# 2026-02-05 13:05:20.251734
++/run node tools/session-memory.js status
+
+# 2026-02-05 13:05:20.513636
++/run node tools/session-memory.js embed --all
+
+# 2026-02-05 13:05:20.513725
++/run node tools/session-memory.js embed --all
+
+# 2026-02-05 13:05:20.779450
++/run node tools/session-memory.js embed --status
+
+# 2026-02-05 13:05:20.779512
++/run node tools/session-memory.js embed --status
+
+# 2026-02-05 13:05:21.025976
++/run node tools/session-memory.js health
+
+# 2026-02-05 13:05:21.026064
++/run node tools/session-memory.js health
+
+# 2026-02-05 13:05:21.284751
++The OpenAI API key should be loaded from credentials using: require('./lib/credentials').get('openai')
+
+# 2026-02-05 13:05:21.329295
++Add the embed command to the CLI with options: --all, --session <id>, --status

@@ -24,6 +24,7 @@
     "playwright-extra": "^4.3.6",
     "protonmail-api": "^2.2.0",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "sqlite-vec": "^0.1.7-alpha.2",
     "twilio": "^5.12.0",
     "twitter-api-v2": "^1.29.0",
     "ws": "^8.19.0"

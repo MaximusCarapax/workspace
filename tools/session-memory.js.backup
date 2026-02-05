@@ -582,6 +582,28 @@ function computeFileHash(filepath) {
     return crypto.createHash('sha256').update(content).digest('hex');
 }
 
+async function generateEmbedding(text, retries = 3) {
+    if (!openai) {
+        throw new Error('OpenAI client not available');
+    }
+    
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const response = await openai.embeddings.create({
+                model: 'text-embedding-3-small',
+                input: text,
+                encoding_format: 'float',
+            });
+            return response.data[0].embedding;
+        } catch (error) {
+            if (attempt === retries) {
+                throw new Error(`Embedding generation failed after ${retries} attempts: ${error.message}`);
+            }
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+    }
+}
 
 async function processSessionFile(chunker, sessionId, filepath) {
     // Validate file
@@ -668,7 +690,175 @@ async function processSessionFile(chunker, sessionId, filepath) {
     console.log(`Processed ${chunks.length} chunks for session ${sessionId}`);
 }
 
+async function embedCommand(options) {
+    try {
+        const embedGenerator = new EmbeddingGenerator();
+        
+        const Database = require('better-sqlite3');
+        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+        
+        if (!fs.existsSync(dbPath)) {
+            console.error('Database not found. Run chunk command first.');
+            process.exit(1);
+        }
+        
+        const sqlite = new Database(dbPath);
+        
+        // Load sqlite-vec extension
+        if (sqliteVec) {
+            try {
+                sqliteVec.load(sqlite);
+                
+                // Ensure vector table exists
+                sqlite.exec(`
+                    CREATE VIRTUAL TABLE IF NOT EXISTS session_embeddings USING vec0(
+                        chunk_id INTEGER PRIMARY KEY,
+                        embedding FLOAT[1536]
+                    )
+                `);
+            } catch (e) {
+                console.error('Failed to load sqlite-vec extension:', e.message);
+                process.exit(1);
+            }
+        } else {
+            console.error('sqlite-vec extension not available. Please install: npm install sqlite-vec');
+            process.exit(1);
+        }
+        
+        let whereClause = '';
+        let params = [];
+        
+        if (options.session) {
+            whereClause = 'WHERE session_id = ?';
+            params = [options.session];
+            console.log(`Embedding chunks for session: ${options.session}`);
+        } else if (options.all) {
+            console.log('Embedding all chunks...');
+        } else {
+            // Default: only embed chunks without embeddings (incremental)
+            whereClause = 'WHERE embedding IS NULL';
+            console.log('Embedding chunks without embeddings (incremental)...');
+        }
+        
+        // Get chunks to embed
+        const chunks = sqlite.prepare(`
+            SELECT id, context_content 
+            FROM session_chunks 
+            ${whereClause}
+            ORDER BY id
+        `).all(...params);
+        
+        if (chunks.length === 0) {
+            console.log('No chunks to embed.');
+            sqlite.close();
+            return;
+        }
+        
+        console.log(`Found ${chunks.length} chunks to embed`);
+        
+        // Generate embeddings in batches
+        const BATCH_SIZE = 50; // Smaller batches for better progress tracking
+        let processedCount = 0;
+        
+        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+            const batch = chunks.slice(i, i + BATCH_SIZE);
+            const texts = batch.map(chunk => chunk.context_content);
+            
+            console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)}...`);
+            
+            try {
+                const embeddings = await embedGenerator.generateBatchEmbeddings(texts, BATCH_SIZE);
+                
+                // Store embeddings
+                const updateStmt = sqlite.prepare('UPDATE session_chunks SET embedding = ? WHERE id = ?');
+                const insertVectorStmt = sqlite.prepare(`
+                    INSERT OR REPLACE INTO session_embeddings (chunk_id, embedding) 
+                    VALUES (?, ?)
+                `);
+                
+                const transaction = sqlite.transaction(() => {
+                    for (let j = 0; j < batch.length; j++) {
+                        const embedding = embeddings[j];
+                        if (embedding) {
+                            const embeddingBuffer = embedGenerator.embeddingToBuffer(embedding);
+                            
+                            // Store in main table
+                            updateStmt.run(embeddingBuffer, batch[j].id);
+                            
+                            // Store in vector table
+                            insertVectorStmt.run(batch[j].id, JSON.stringify(embedding));
+                            
+                            processedCount++;
+                        } else {
+                            console.warn(`Failed to generate embedding for chunk ${batch[j].id}`);
+                        }
+                    }
+                });
+                
+                transaction();
+                console.log(`✓ Processed ${processedCount} embeddings so far`);
+                
+            } catch (error) {
+                console.error(`Error processing batch:`, error.message);
+                // Continue with next batch
+            }
+        }
+        
+        sqlite.close();
+        console.log(`🎉 Embedding completed! Processed ${processedCount} chunks.`);
+        
+    } catch (error) {
+        console.error('Error during embedding:', error.message);
+        process.exit(1);
+    }
+}
 
+async function embedStatusCommand() {
+    try {
+        const Database = require('better-sqlite3');
+        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+        
+        if (!fs.existsSync(dbPath)) {
+            console.log('No database found.');
+            return;
+        }
+        
+        const sqlite = new Database(dbPath);
+        
+        const totalChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks').get()?.count || 0;
+        const embeddedChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE embedding IS NOT NULL').get()?.count || 0;
+        const pendingChunks = totalChunks - embeddedChunks;
+        
+        // Check if vector table exists and has data
+        let vectorTableStats = null;
+        try {
+            vectorTableStats = sqlite.prepare('SELECT COUNT(*) as count FROM session_embeddings').get();
+        } catch (e) {
+            // Vector table doesn't exist or sqlite-vec not loaded
+        }
+        
+        sqlite.close();
+        
+        console.log('\n📊 Embedding Status');
+        console.log('==================');
+        console.log(`Total chunks: ${totalChunks}`);
+        console.log(`Embedded chunks: ${embeddedChunks}`);
+        console.log(`Pending chunks: ${pendingChunks}`);
+        
+        if (vectorTableStats) {
+            console.log(`Vector search entries: ${vectorTableStats.count}`);
+        } else {
+            console.log('Vector search: Not available (sqlite-vec not loaded)');
+        }
+        
+        const embeddedPercentage = totalChunks > 0 ? ((embeddedChunks / totalChunks) * 100).toFixed(1) : 0;
+        console.log(`Completion: ${embeddedPercentage}%`);
+        
+    } catch (error) {
+        console.error('Error getting embedding status:', error.message);
+        process.exit(1);
+    }
+}
 
 async function validateCommand(file) {
     const validation = SessionValidator.validateSessionFile(file);
@@ -784,6 +974,85 @@ async function generateEmbedding(text) {
     return data.data[0].embedding;
 }
 
+async function embedCommand(options) {
+    console.log('Generating embeddings...\n');
+    
+    const Database = require('better-sqlite3');
+    const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+    const sqlite = new Database(dbPath);
+    
+    // Create embeddings table if not exists
+    sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS session_embeddings (
+            chunk_id INTEGER PRIMARY KEY,
+            embedding BLOB NOT NULL,
+            context_content TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (chunk_id) REFERENCES session_chunks(id)
+        )
+    `);
+    
+    // Get chunks to embed
+    let query = 'SELECT c.* FROM session_chunks c';
+    if (!options.force) {
+        query += ' LEFT JOIN session_embeddings e ON c.id = e.chunk_id WHERE e.chunk_id IS NULL';
+    }
+    if (options.session) {
+        query += (options.force ? ' WHERE' : ' AND') + ` c.session_id = '${options.session}'`;
+    }
+    
+    const chunks = sqlite.prepare(query).all();
+    
+    if (chunks.length === 0) {
+        console.log('No chunks need embedding.');
+        sqlite.close();
+        return;
+    }
+    
+    console.log(`Embedding ${chunks.length} chunks...`);
+    
+    const insertStmt = sqlite.prepare(`
+        INSERT OR REPLACE INTO session_embeddings (chunk_id, embedding, context_content)
+        VALUES (?, ?, ?)
+    `);
+    
+    let success = 0;
+    let failed = 0;
+    
+    for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        
+        try {
+            // Build contextual content
+            const contextContent = buildContextualContent(chunk);
+            
+            // Generate embedding
+            const embedding = await generateEmbedding(contextContent);
+            
+            // Store as binary blob (Float32Array)
+            const buffer = Buffer.from(new Float32Array(embedding).buffer);
+            
+            insertStmt.run(chunk.id, buffer, contextContent);
+            success++;
+            
+            // Progress indicator
+            if ((i + 1) % 50 === 0 || i === chunks.length - 1) {
+                console.log(`  Progress: ${i + 1}/${chunks.length} (${success} embedded, ${failed} failed)`);
+            }
+            
+            // Rate limiting - small delay between requests
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+        } catch (error) {
+            console.error(`  Error embedding chunk ${chunk.id}: ${error.message}`);
+            failed++;
+        }
+    }
+    
+    sqlite.close();
+    
+    console.log(`\n✅ Embedding complete: ${success} success, ${failed} failed`);
+}
 
 async function embedCommand(options) {
     try {
@@ -868,9 +1137,6 @@ async function embedCommand(options) {
         
         console.log(`Generating embeddings for ${chunksToEmbed.length} chunks...`);
         
-        // Create embedding generator
-        const embeddingGenerator = new EmbeddingGenerator();
-        
         // Process in batches
         const BATCH_SIZE = 10;
         let processed = 0;
@@ -883,10 +1149,11 @@ async function embedCommand(options) {
                 try {
                     // Use context_content if available, otherwise use content
                     const textToEmbed = chunk.context_content || chunk.content;
-                    const embedding = await embeddingGenerator.generateEmbedding(textToEmbed);
+                    const embedding = await generateEmbedding(textToEmbed);
                     
-                    // Convert embedding to Buffer for storage
-                    const buffer = embeddingGenerator.embeddingToBuffer(embedding);
+                    // Convert embedding to Float32Array for storage
+                    const floatArray = new Float32Array(embedding);
+                    const buffer = floatArray.buffer;
                     
                     // Update embedding in session_chunks
                     sqlite.prepare('UPDATE session_chunks SET embedding = ? WHERE id = ?')
@@ -897,7 +1164,7 @@ async function embedCommand(options) {
                         sqlite.prepare(`
                             INSERT OR REPLACE INTO session_embeddings (chunk_id, embedding)
                             VALUES (?, ?)
-                        `).run(chunk.id, JSON.stringify(Array.from(embedding)));
+                        `).run(chunk.id, floatArray);
                     } catch (error) {
                         console.warn(`Could not insert into session_embeddings for chunk ${chunk.id}:`, error.message);
                     }
@@ -947,163 +1214,6 @@ async function embedCommand(options) {
     }
 }
 
-async function searchCommand(query, options) {
-    try {
-        const Database = require('better-sqlite3');
-        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
-        
-        if (!fs.existsSync(dbPath)) {
-            console.error('No database found. Run chunk and embed commands first.');
-            process.exit(1);
-        }
-        
-        const sqlite = new Database(dbPath);
-        
-        // Check if we have embeddings
-        const embeddedChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE embedding IS NOT NULL').get()?.count || 0;
-        if (embeddedChunks === 0) {
-            console.error('No embedded chunks found. Run embed command first.');
-            sqlite.close();
-            process.exit(1);
-        }
-        
-        // Generate embedding for the query
-        const embeddingGenerator = new EmbeddingGenerator();
-        console.log(`🔍 Searching for: "${query}"`);
-        const queryEmbedding = await embeddingGenerator.generateEmbedding(query);
-        
-        // Build the SQL query with filters
-        let sqlQuery = `
-            SELECT 
-                sc.id,
-                sc.session_id,
-                sc.timestamp,
-                sc.speakers,
-                sc.topic_tags,
-                sc.content,
-                sc.embedding,
-                sc.has_decision,
-                sc.has_action
-            FROM session_chunks sc
-            WHERE sc.embedding IS NOT NULL
-        `;
-        
-        const params = [];
-        
-        // Add date filters
-        if (options.after) {
-            sqlQuery += ' AND sc.timestamp >= ?';
-            params.push(new Date(options.after).toISOString());
-        }
-        
-        if (options.before) {
-            sqlQuery += ' AND sc.timestamp <= ?';
-            params.push(new Date(options.before).toISOString());
-        }
-        
-        // Add topic filter
-        if (options.topic) {
-            sqlQuery += ' AND sc.topic_tags LIKE ?';
-            params.push(`%"${options.topic}"%`);
-        }
-        
-        sqlQuery += ' ORDER BY sc.timestamp DESC';
-        
-        // Get all matching chunks
-        const chunks = sqlite.prepare(sqlQuery).all(...params);
-        
-        if (chunks.length === 0) {
-            console.log('No chunks found matching the filters.');
-            sqlite.close();
-            return;
-        }
-        
-        console.log(`Found ${chunks.length} chunks to search...`);
-        
-        // Calculate cosine similarity for each chunk
-        const results = chunks.map(chunk => {
-            const embedding = embeddingGenerator.bufferToEmbedding(chunk.embedding);
-            const similarity = cosineSimilarity(queryEmbedding, embedding);
-            
-            return {
-                ...chunk,
-                relevance_score: similarity
-            };
-        });
-        
-        // Sort by relevance and limit
-        const limit = parseInt(options.limit) || 5;
-        const topResults = results
-            .sort((a, b) => b.relevance_score - a.relevance_score)
-            .slice(0, limit);
-        
-        // Format and display results
-        console.log('');
-        topResults.forEach((result, index) => {
-            const date = new Date(result.timestamp).toLocaleString('en-AU', {
-                timeZone: 'Australia/Melbourne',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            
-            const topics = JSON.parse(result.topic_tags || '[]');
-            const topicStr = topics.length > 0 ? topics.join(', ') : 'general';
-            
-            console.log(`[${index + 1}] Score: ${result.relevance_score.toFixed(2)} | ${date}`);
-            console.log(`    Topics: ${topicStr}`);
-            
-            // Show content with line breaks for readability
-            const content = result.content.length > 200 
-                ? result.content.substring(0, 200) + '...'
-                : result.content;
-            const lines = content.split('\n');
-            lines.forEach(line => {
-                if (line.trim()) {
-                    console.log(`    "${line.trim()}"`);
-                }
-            });
-            console.log('');
-        });
-        
-        console.log(`Showing ${topResults.length} of ${chunks.length} results`);
-        
-        sqlite.close();
-        
-    } catch (error) {
-        console.error('Error during search:', error.message);
-        process.exit(1);
-    }
-}
-
-// Calculate cosine similarity between two embeddings
-function cosineSimilarity(a, b) {
-    if (!a || !b || a.length !== b.length) {
-        return 0;
-    }
-    
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-    
-    for (let i = 0; i < a.length; i++) {
-        dotProduct += a[i] * b[i];
-        normA += a[i] * a[i];
-        normB += b[i] * b[i];
-    }
-    
-    normA = Math.sqrt(normA);
-    normB = Math.sqrt(normB);
-    
-    if (normA === 0 || normB === 0) {
-        return 0;
-    }
-    
-    return dotProduct / (normA * normB);
-}
-
 async function healthCommand() {
     try {
         const Database = require('better-sqlite3');
@@ -1132,7 +1242,7 @@ async function healthCommand() {
         const lastIndexed = sqlite.prepare('SELECT MAX(last_indexed) as latest FROM session_index_state').get()?.latest;
         
         // Check embeddings
-        const embeddedChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE embedding IS NOT NULL').get()?.count || 0;
+        const embeddedChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_embeddings').get()?.count || 0;
         
         sqlite.close();
         
@@ -1196,13 +1306,12 @@ program
     .action(embedCommand);
 
 program
-    .command('search <query>')
-    .description('Search session chunks using semantic similarity')
-    .option('--after <date>', 'Filter by date after (YYYY-MM-DD)')
-    .option('--before <date>', 'Filter by date before (YYYY-MM-DD)')
-    .option('--topic <tag>', 'Filter by topic tag')
-    .option('--limit <n>', 'Limit number of results (default: 5)')
-    .action(searchCommand);
+    .command('embed')
+    .description('Generate embeddings for chunks')
+    .option('--all', 'Embed all unembedded chunks')
+    .option('--session <id>', 'Embed specific session')
+    .option('--force', 'Re-embed even if already embedded')
+    .action(embedCommand);
 
 if (require.main === module) {
     program.parse();
