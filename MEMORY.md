@@ -31,12 +31,15 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 **⚠️ Gemini is NOT free** — we use OpenRouter Gemini to avoid rate limits. Both DeepSeek and Gemini are cheap, not free.
 
 ### Delegation Rules
-1. **Coding** → Always DeepSeek (better at code)
-2. **Summarization, research, text gen** → Gemini
-3. **Any build work** → Backlog + sub-agent. NO exceptions for "quick" builds.
+1. **Research** → `research.js` (simple) or researcher sub-agent (complex)
+2. **Coding** → `aider`/DeepSeek or builder sub-agent
+3. **Summarization** → `gemini.js`
+4. **Content writing** → writer sub-agent
+5. **QA/review** → reviewer sub-agent
+6. **Any build work** → Backlog + sub-agent. NO exceptions for "quick" builds.
    - Compaction can happen mid-build → lose all progress
    - Sub-agents run on Sonnet at ~1/5 Opus cost
-4. **My role** → Plan, decide, review output, final judgment — NOT generating code directly
+7. **My role** → Plan, decide, review output, final judgment — NOT generating tokens directly
 
 ## My Accounts & Access
 - **ProtonMail:** maximuscarapax@proton.me (primary email now)
@@ -148,7 +151,7 @@ Full research: docs/AFFILIATE_PROGRAMS.md
 
 ## Sub-Agent Cost Pattern
 - Default sub-agents to **Sonnet** (not Opus) via `model` parameter
-- Reference `docs/SUBAGENT_GUIDELINES.md` in task prompts
+- Sub-agents read `subagents/guidelines.md` for standard practices
 - Sub-agents should delegate to Gemini/DeepSeek for grunt work
 
 ## Night Shift (Cron Job)
