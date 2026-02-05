@@ -47,6 +47,30 @@ node tools/db.js activity                # Recent activity
 
 Library: `require('./lib/db')` for programmatic access
 
+## Cost Alerting 💸
+Monitor daily API spend and get alerts when threshold is exceeded:
+```bash
+node tools/cost-alert.js check                   # Check current spend vs threshold
+node tools/cost-alert.js check --quiet           # Check without sending alerts
+node tools/cost-alert.js config                  # Show current configuration
+node tools/cost-alert.js config --threshold 200  # Set threshold to $200
+node tools/cost-alert.js config --target <id>    # Set Telegram chat ID for alerts
+node tools/cost-alert.js config --enable         # Enable alerts
+node tools/cost-alert.js config --disable        # Disable alerts
+node tools/cost-alert.js reset                   # Reset alert state for today
+node tools/cost-alert.js status                  # Output JSON status (for scripting)
+```
+
+**Features:**
+- Configurable daily threshold (default: $150)
+- Max 1 alert per day (state tracked in JSON file)
+- Alerts via Telegram message
+- Integrates with heartbeat/cron for periodic checks
+- Warning at 80%, alert at 100% of threshold
+
+**Config:** `~/.openclaw/config/cost-alert.json`
+**State:** `~/.openclaw/data/cost-alert-state.json`
+
 ## Model Router 🔀
 Automatic task routing to cheapest capable model:
 ```bash
