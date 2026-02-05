@@ -20,7 +20,7 @@ const twilioNumber = creds.get('twilio_au_phone_number') || '+61468089420';
 
 // Hume credentials
 const humeApiKey = creds.get('hume_api_key');
-const humeConfigId = 'cc7579f9-a0a1-4dd0-bacc-62971d333de4'; // max-gemini-25 (Gemini 2.5 Flash)
+const humeConfigId = '9b067366-25ac-4bb0-9511-9203ec787ded'; // max-hume-native (Hume's own LLM - faster, native hang_up)
 
 if (!accountSid || !authToken) {
   console.error('❌ Missing Twilio AU credentials (twilio_au_account_sid, twilio_au_auth_token)');

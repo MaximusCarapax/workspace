@@ -417,3 +417,32 @@ node tools/hume-call.js status <callSid>          # Check call status
 ```
 
 **Inbound calls:** Call +61 468 089 420, Hume EVI answers as Max.
+
+### Twilio-Hume Bridge Server 🌉
+Advanced bridge server that connects Twilio voice calls directly to Hume EVI with full tool support:
+
+```bash
+node tools/hume-twilio-bridge.js [port] [hume-config-id]    # Start bridge server
+node tools/test-hume-bridge.js                             # Test setup
+bash tools/start-hume-bridge.sh [port]                     # Quick start
+```
+
+**Features:**
+- ✅ **Real-time audio streaming** between Twilio calls and Hume EVI
+- ✅ **Tool call support** - handles `hang_up` to end calls automatically
+- ✅ **Audio format conversion** - mulaw ↔ PCM conversion
+- ✅ **Session management** - tracks active calls with cleanup
+- ✅ **Health monitoring** - `/health` and `/status` endpoints
+
+**Setup:**
+1. `node tools/hume-twilio-bridge.js 3000` - Start server
+2. `ngrok http 3000` - Expose via tunnel
+3. Configure Twilio webhook: `https://your-ngrok-url.com/voice/incoming`
+4. Call +61 468 089 420 to test
+
+**Configuration:**
+- Default Hume config: `cc7579f9-a0a1-4dd0-bacc-62971d333de4` (max-gemini-25)
+- Twilio AU number: +61 468 089 420  
+- Credentials loaded from `~/.openclaw/secrets/credentials.json`
+
+See [docs/hume-twilio-bridge.md](docs/hume-twilio-bridge.md) for complete documentation.
