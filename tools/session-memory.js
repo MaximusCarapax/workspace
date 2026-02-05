@@ -955,9 +955,8 @@ async function embedCommand(options) {
                     const textToEmbed = chunk.context_content || chunk.content;
                     const embedding = await generateEmbedding(textToEmbed);
                     
-                    // Convert embedding to Float32Array for storage
-                    const floatArray = new Float32Array(embedding);
-                    const buffer = floatArray.buffer;
+                    // Convert embedding to Buffer for storage
+                    const buffer = embeddingToBuffer(embedding);
                     
                     // Update embedding in session_chunks
                     sqlite.prepare('UPDATE session_chunks SET embedding = ? WHERE id = ?')
@@ -968,7 +967,7 @@ async function embedCommand(options) {
                         sqlite.prepare(`
                             INSERT OR REPLACE INTO session_embeddings (chunk_id, embedding)
                             VALUES (?, ?)
-                        `).run(chunk.id, floatArray);
+                        `).run(chunk.id, JSON.stringify(Array.from(embedding)));
                     } catch (error) {
                         console.warn(`Could not insert into session_embeddings for chunk ${chunk.id}:`, error.message);
                     }
