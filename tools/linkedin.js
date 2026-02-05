@@ -743,12 +743,28 @@ async function main() {
         showHelp();
     }
   } catch (err) {
-    db.logError({
-      source: 'linkedin',
-      message: err.message,
-      details: `LinkedIn CLI command failed: ${command}`,
-      stack: err.stack
-    });
+    // Only log actual failures, not expected conditions
+    const expectedPatterns = [
+      'already liked',
+      'already following',
+      'not found',
+      'timeout',
+      'expired'
+    ];
+    
+    const isExpected = expectedPatterns.some(pattern => 
+      err.message.toLowerCase().includes(pattern.toLowerCase())
+    );
+    
+    if (!isExpected) {
+      db.logError({
+        source: 'linkedin',
+        message: err.message,
+        details: `LinkedIn CLI command failed: ${command}`,
+        stack: err.stack
+      });
+    }
+    
     console.error('❌ Error:', err.message);
     process.exit(1);
   }

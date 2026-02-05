@@ -172,17 +172,31 @@ async function postTweet(text, options = {}) {
       text: validated
     };
   } catch (e) {
-    // Log error to database
-    try {
-      db.logError({
-        level: 'error',
-        source: 'x-post',
-        message: e.message,
-        details: `Failed to post tweet: ${validated.substring(0, 50)}...`,
-        stack: e.stack
-      });
-    } catch (dbError) {
-      console.error('Failed to log error to database:', dbError.message);
+    // Only log if it's not an expected condition
+    const expectedPatterns = [
+      'duplicate',
+      'rate limit',
+      'too many requests',
+      'quota exceeded'
+    ];
+    
+    const isExpected = expectedPatterns.some(pattern => 
+      e.message.toLowerCase().includes(pattern.toLowerCase())
+    );
+    
+    if (!isExpected) {
+      // Log error to database
+      try {
+        db.logError({
+          level: 'error',
+          source: 'x-post',
+          message: e.message,
+          details: `Failed to post tweet: ${validated.substring(0, 50)}...`,
+          stack: e.stack
+        });
+      } catch (dbError) {
+        console.error('Failed to log error to database:', dbError.message);
+      }
     }
     
     console.error('❌ Failed to post:', e.message);
@@ -247,17 +261,31 @@ async function postThread(tweets, options = {}) {
         await new Promise(r => setTimeout(r, 1000));
       }
     } catch (e) {
-      // Log error to database
-      try {
-        db.logError({
-          level: 'error',
-          source: 'x-post',
-          message: e.message,
-          details: `Failed to post thread at tweet ${i + 1}/${validated.length}`,
-          stack: e.stack
-        });
-      } catch (dbError) {
-        console.error('Failed to log error to database:', dbError.message);
+      // Only log if it's not an expected condition
+      const expectedPatterns = [
+        'duplicate',
+        'rate limit',
+        'too many requests',
+        'quota exceeded'
+      ];
+      
+      const isExpected = expectedPatterns.some(pattern => 
+        e.message.toLowerCase().includes(pattern.toLowerCase())
+      );
+      
+      if (!isExpected) {
+        // Log error to database
+        try {
+          db.logError({
+            level: 'error',
+            source: 'x-post',
+            message: e.message,
+            details: `Failed to post thread at tweet ${i + 1}/${validated.length}`,
+            stack: e.stack
+          });
+        } catch (dbError) {
+          console.error('Failed to log error to database:', dbError.message);
+        }
       }
       
       console.error(`❌ Failed at tweet ${i + 1}:`, e.message);

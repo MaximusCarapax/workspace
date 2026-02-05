@@ -226,17 +226,30 @@ async function checkMentions(showAll = false) {
       usedFallback = true;
       console.log(`✓ Using X API (${result.quotaUsed}/100 reads this month)`);
     } catch (apiError) {
-      // Log error to database
-      try {
-        db.logError({
-          level: 'error',
-          source: 'x-mentions',
-          message: apiError.message,
-          details: 'Failed to check mentions via both Bird CLI and X API',
-          stack: apiError.stack
-        });
-      } catch (dbError) {
-        console.error('Failed to log error to database:', dbError.message);
+      // Only log if it's not an expected condition (like quota exceeded)
+      const expectedPatterns = [
+        'quota exhausted',
+        'rate limit',
+        'quota nearly exhausted'
+      ];
+      
+      const isExpected = expectedPatterns.some(pattern => 
+        apiError.message.toLowerCase().includes(pattern.toLowerCase())
+      );
+      
+      if (!isExpected) {
+        // Log error to database
+        try {
+          db.logError({
+            level: 'error',
+            source: 'x-mentions',
+            message: apiError.message,
+            details: 'Failed to check mentions via both Bird CLI and X API',
+            stack: apiError.stack
+          });
+        } catch (dbError) {
+          console.error('Failed to log error to database:', dbError.message);
+        }
       }
       
       console.error(`✗ X API also failed: ${apiError.message}`);

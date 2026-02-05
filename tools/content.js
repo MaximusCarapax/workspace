@@ -544,17 +544,31 @@ try {
     process.exit(1);
   }
 } catch (error) {
-  // Log error to database
-  try {
-    db.logError({
-      level: 'error',
-      source: 'content',
-      message: error.message,
-      details: `Command: ${command}`,
-      stack: error.stack
-    });
-  } catch (dbError) {
-    console.error('Failed to log error to database:', dbError.message);
+  // Only log actual failures, not expected conditions
+  const expectedPatterns = [
+    'not found',
+    'no items',
+    'empty',
+    'invalid command'
+  ];
+    
+  const isExpected = expectedPatterns.some(pattern => 
+    error.message.toLowerCase().includes(pattern.toLowerCase())
+  );
+    
+  if (!isExpected) {
+    // Log error to database
+    try {
+      db.logError({
+        level: 'error',
+        source: 'content',
+        message: error.message,
+        details: `Command: ${command}`,
+        stack: error.stack
+      });
+    } catch (dbError) {
+      console.error('Failed to log error to database:', dbError.message);
+    }
   }
     
   console.error(`❌ Error: ${error.message}`);

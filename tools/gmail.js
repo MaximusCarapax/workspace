@@ -398,12 +398,29 @@ Usage:
         `);
     }
   } catch (err) {
-    db.logError({
-      source: 'gmail',
-      message: err.message,
-      details: `Gmail CLI command failed: ${cmd}`,
-      stack: err.stack
-    });
+    // Only log actual failures, not expected conditions
+    // Check if error message indicates an expected condition
+    const expectedPatterns = [
+      'no messages found',
+      'no unread',
+      'not found',
+      'rate limit',
+      'quota exceeded'
+    ];
+    
+    const isExpected = expectedPatterns.some(pattern => 
+      err.message.toLowerCase().includes(pattern.toLowerCase())
+    );
+    
+    if (!isExpected) {
+      db.logError({
+        source: 'gmail',
+        message: err.message,
+        details: `Gmail CLI command failed: ${cmd}`,
+        stack: err.stack
+      });
+    }
+    
     console.error('Error:', err.message);
     process.exit(1);
   }
