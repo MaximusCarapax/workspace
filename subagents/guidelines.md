@@ -19,6 +19,12 @@
 **Memory search (if you need more context):**
 Use `memory_search` tool to find relevant information from the knowledge base.
 
+**Web search (rate limit awareness):**
+- Brave Search API has 1 req/sec rate limit (Free plan)
+- Do NOT fire multiple `web_search` calls in the same tool block
+- Stagger searches: wait ~2 seconds between calls (separate tool blocks)
+- Alternative: use `web_fetch` for direct URLs (no rate limit)
+
 **File access:**
 - Read specs: `specs/` folder
 - Read docs: `docs/` folder

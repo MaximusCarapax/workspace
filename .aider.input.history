@@ -446,3 +446,102 @@
 
 # 2026-02-05 01:56:59.324677
 +Task: Transform tools/content.js for Content Pipeline v2
+
+# 2026-02-05 03:05:49.232576
++Add automatic error logging to tools using db.logError().
+
+# 2026-02-05 03:07:23.152172
++Add automatic error logging to key tools. **Goal:** When tools encounter errors, they should automatically log to the database via `db.logError()`. **Pattern to add:** ```javascript const db = require('../lib/db'); // In catch blocks: catch (err) { db.logError({ source: 'tool-name', message: err.message, details: 'Context about what was happening', stack: err.stack }); // ... existing error handling } ``` **Tools to update:** 1. `tools/linkedin.js` - source: 'linkedin' 2. `tools/x-post.js` - source: 'x-post' 3. `tools/x-mentions.js` - source: 'x-mentions' 4. `tools/content.js` - source: 'content' 5. `tools/gmail.js` - source: 'gmail' **Requirements:** - Add `const db = require('../lib/db');` or `require('./lib/db')` at top (check relative path) - Find all catch blocks that handle real errors (not expected conditions) - Add `db.logError()` call before existing error handling - Don't log expected errors (like "no unread emails" - that's not an error) - Only log actual failures (API errors, missing deps, crashes)
+
+# 2026-02-05 03:08:59.162526
++For each tool file (linkedin.js, x-post.js, x-mentions.js, content.js, gmail.js):
+
+# 2026-02-05 03:12:10.831876
++1. Add `const db = require('../lib/db');` at the top after existing requires (check if path needs to be './lib/db' based on file location)
+
+# 2026-02-05 03:13:44.947214
++2. Find catch blocks that handle real errors (not expected conditions like missing files or migration failures)
+
+# 2026-02-05 03:15:18.665862
++3. Add db.logError() call BEFORE existing error handling in these catch blocks:
+
+# 2026-02-05 03:17:05.876963
++```javascript
+
+# 2026-02-05 03:19:00.473379
++db.logError({ 
+
+# 2026-02-05 03:21:23.977941
++  source: 'tool-name', 
+
+# 2026-02-05 03:22:45.540555
++  message: err.message, 
+
+# 2026-02-05 03:23:52.075834
++  details: 'Context about what was happening',
+
+# 2026-02-05 03:24:58.527739
++  stack: err.stack 
+
+# 2026-02-05 03:26:11.952234
++});
+
+# 2026-02-05 03:27:14.768259
++```
+
+# 2026-02-05 03:28:17.438572
++Use these source names:
+
+# 2026-02-05 03:29:21.698409
++- tools/linkedin.js -> source: 'linkedin'
+
+# 2026-02-05 03:30:34.570683
++- tools/x-post.js -> source: 'x-post' 
+
+# 2026-02-05 03:31:25.843465
++- tools/x-mentions.js -> source: 'x-mentions'
+
+# 2026-02-05 03:32:09.054351
++- tools/content.js -> source: 'content'
+
+# 2026-02-05 03:32:50.426052
++- tools/gmail.js -> source: 'gmail'
+
+# 2026-02-05 03:33:14.847859
++Don't log expected errors like "no unread emails" or migration failures. Only log actual failures (API errors, missing dependencies, crashes).
+
+# 2026-02-05 06:50:33.027865
++Refactor this to use ONLY native PDF input via OpenRouter. Remove ALL image conversion code:
++
++1. Remove pdfToImages function entirely
++2. Remove extractWithImages function entirely  
++3. Remove --images and --keep-images CLI options
++4. Remove useImages and keepImages options from extract()
++5. Remove pdftoppm references
++6. Keep extractWithPDFs as the only extraction method
++7. Update default model to 'gemini-pro' (google/gemini-2.5-pro)
++8. Simplify the extract() function - no fallback to images
++9. Keep the supplementary imageFiles support (for drawing pages)
++
++The OpenRouter PDF format is correct as-is:
++{type: 'file', file: {filename: 'doc.pdf', file_data: 'data:application/pdf;base64,...'}}
++
++Keep it clean and simple - PDF-only extraction.
+
+# 2026-02-05 06:50:33.027961
++Refactor this to use ONLY native PDF input via OpenRouter. Remove ALL image conversion code:
++
++1. Remove pdfToImages function entirely
++2. Remove extractWithImages function entirely  
++3. Remove --images and --keep-images CLI options
++4. Remove useImages and keepImages options from extract()
++5. Remove pdftoppm references
++6. Keep extractWithPDFs as the only extraction method
++7. Update default model to 'gemini-pro' (google/gemini-2.5-pro)
++8. Simplify the extract() function - no fallback to images
++9. Keep the supplementary imageFiles support (for drawing pages)
++
++The OpenRouter PDF format is correct as-is:
++{type: 'file', file: {filename: 'doc.pdf', file_data: 'data:application/pdf;base64,...'}}
++
++Keep it clean and simple - PDF-only extraction.
