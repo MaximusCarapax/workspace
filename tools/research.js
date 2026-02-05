@@ -151,7 +151,11 @@ async function fetchUrl(url) {
       let data = '';
       res.on('data', chunk => {
         data += chunk;
-        if (data.length > 500000) res.destroy(); // Limit raw HTML
+        if (data.length > 500000) {
+          clearTimeout(timeout);
+          res.destroy(); // Limit raw HTML
+          resolve({ url, html: data });
+        }
       });
       res.on('end', () => {
         clearTimeout(timeout);
@@ -231,6 +235,11 @@ async function callGemini(prompt) {
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
+          // Check for auth errors (401/403) before processing JSON error
+          if (res.statusCode === 401 || res.statusCode === 403) {
+            reject(new Error(`OpenRouter auth error (HTTP ${res.statusCode}): Check your API key`));
+            return;
+          }
           if (json.error) {
             // Check if it's a quota/rate error
             const errorMessage = json.error.message || JSON.stringify(json.error);
@@ -482,33 +491,6 @@ ${sourcesText}`;
   
   console.error(`[Research] Done (${provider})\n`);
   console.log(result);
-}
-
-// Check for required dependencies before using them
-function checkDependencies() {
-  try {
-    require('jsdom');
-    require('@mozilla/readability');
-    return true;
-  } catch (e) {
-    console.error('Missing required dependencies. Installing...');
-    try {
-      require('child_process').execSync('npm install jsdom @mozilla/readability', { 
-        stdio: 'inherit',
-        cwd: __dirname 
-      });
-      console.error('Dependencies installed successfully.');
-      return true;
-    } catch (installError) {
-      console.error('Failed to install dependencies:', installError.message);
-      console.error('Please run: npm install jsdom @mozilla/readability');
-      return false;
-    }
-  }
-}
-
-if (!checkDependencies()) {
-  process.exit(1);
 }
 
 main().catch(e => {
