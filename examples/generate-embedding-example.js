@@ -42,9 +42,8 @@ async function main() {
     console.log(`   Memory created with ID: ${memoryId}`);
     
     // Generate and store embedding for this memory
-    // Note: generateAndStoreEmbedding is not exported in db.js, so we'll use addEmbeddingToMemory from embeddings
-    const { addEmbeddingToMemory } = require('../lib/embeddings');
-    const result = await addEmbeddingToMemory(memoryId, null, {
+    // Use the generateAndStoreEmbedding function from db.js
+    const result = await db.generateAndStoreEmbedding(memoryId, {
       model: 'text-embedding-3-small',
       sessionId: 'example-session',
       source: 'example'

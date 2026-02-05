@@ -28,9 +28,13 @@ try {
   console.log(`\n3. Default embedding dimensions: ${dims}`);
   
   console.log('\n✅ All checks passed!');
-  console.log('\nTo generate an actual embedding, run:');
+  console.log('\nTo generate an actual embedding, you can use either:');
+  console.log('   From embeddings module:');
   console.log('   node -e "const { generateEmbedding } = require(\'./lib/embeddings\');');
   console.log('   generateEmbedding(\'test text\').then(e => console.log(\'Dimensions:\', e.length)).catch(console.error);"');
+  console.log('\n   From db module:');
+  console.log('   node -e "const db = require(\'./lib/db\');');
+  console.log('   db.generateEmbedding(\'test text\').then(e => console.log(\'Dimensions:\', e.length)).catch(console.error);"');
   
 } catch (error) {
   console.error('\n❌ Failed to load embeddings module:', error.message);
