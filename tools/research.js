@@ -150,7 +150,7 @@ async function fetchUrl(url) {
       res.on('data', chunk => {
         data += chunk;
         if (data.length > 500000) {
-          clearTimeout(timeout);
+          clearTimeout(timeout); // Clear timeout before destroying response
           res.destroy(); // Limit raw HTML
           resolve({ url, html: data });
         }
