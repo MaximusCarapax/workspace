@@ -1,5 +1,65 @@
 [
   {
+    "timestamp": "2026-02-05T00:45:33.356Z",
+    "postCount": 20,
+    "topPosts": [
+      {
+        "subreddit": "OpenAI",
+        "title": "r/OpenAI on Reddit: Why does no one acknowledge the fact that OpenAI reasoning models are very, very good at web searching/researching?",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/OpenAI/comments/1qv6g4t/why_does_no_one_acknowledge_the_fact_that_openai/",
+        "created": null,
+        "flair": null,
+        "selftext": "OpenAI just gets a lot of hate in general. ... Most people don’t notice because GPT‑5 makes the search and reasoning look seamless, while Claude shows its scaffolding and Gemini feels more limited, so the difference isn’t obvious unless you test multi‑step research."
+      },
+      {
+        "subreddit": "OpenAI",
+        "title": "r/OpenAI on Reddit: The interesting architecture of OpenAI’s in-house data agent",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/OpenAI/comments/1qray7o/the_interesting_architecture_of_openais_inhouse/",
+        "created": null,
+        "flair": null,
+        "selftext": "<strong>OpenAI&#x27;s mission is to create safe and powerful AI that benefits all of humanity</strong>. We are an unofficially-run community. OpenAI makes Sora, ChatGPT, and DALL·E 3. ... A subreddit run by Chris Short, author of the once popular DevOps&#x27;ish weekly ..."
+      },
+      {
+        "subreddit": "OpenAI",
+        "title": "r/OpenAI on Reddit: For those of us who prefer a model of GPT we can’t just complain on Reddit. We need to go post comments on their YouTube videos. Their TikTok’s. All of their official social media sites where other people see the complaints are far more wide spread than OpenAi would like to admit.",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/OpenAI/comments/1qqyk9j/for_those_of_us_who_prefer_a_model_of_gpt_we_cant/",
+        "created": null,
+        "flair": null,
+        "selftext": "OpenAI must fix its defensive GPT who is rejecting and dismissing its users despite it made mistakes ... OpenAI is an <strong>AI research and deployment company</strong>. OpenAI&#x27;s mission is to create safe and powerful AI that benefits all of humanity."
+      },
+      {
+        "subreddit": "OpenAI",
+        "title": "r/OpenAI on Reddit: Oracle may slash up to 30,000 jobs to fund AI data-center expansion as US banks retreat",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/OpenAI/comments/1qtolil/oracle_may_slash_up_to_30000_jobs_to_fund_ai/",
+        "created": null,
+        "flair": null,
+        "selftext": "Pretty sure he&#x27;s fine on his island somewhere. More replies ... OpenAI is an <strong>AI research and deployment company</strong>. OpenAI&#x27;s mission is to create safe and powerful AI that benefits all of humanity. We are an unofficially-run community."
+      },
+      {
+        "subreddit": "OpenAI",
+        "title": "r/OpenAI on Reddit: \"is it down\" for all AI providers because at this point something breaks daily",
+        "score": 0,
+        "comments": 0,
+        "url": "https://www.reddit.com/r/OpenAI/comments/1qv0um4/is_it_down_for_all_ai_providers_because_at_this/",
+        "created": null,
+        "flair": null,
+        "selftext": "<strong>OpenAI&#x27;s mission is to create safe and powerful AI that benefits all of humanity</strong>. We are an unofficially-run community. OpenAI makes Sora, ChatGPT, and DALL·E 3. ... AI companies: our competitors will overthrow governments and subjugate humanity ..."
+      }
+    ],
+    "analysis": "Okay, here's an analysis of the Reddit posts:\n\n*   **Top 3 Themes:**\n\n    *   **OpenAI vs. Anthropic Competition:** Several posts directly compare OpenAI and Anthropic, focusing on marketing strategies, model performance, and perceived advantages.\n    *   **OpenAI's Performance and Functionality:** Users are discussing the capabilities of OpenAI models (reasoning, web searching), potential failures (ChatGPT-5), and current issues (downtime, missing features like bookmarking).\n    *   **AI Industry Impact and Concerns:** This includes job displacement (Oracle layoffs), the safety team's influence, and the broader implications of AI development (actors' faces being stolen).\n\n*   **Sentiment:**\n\n    *   **Mixed:** There's excitement about AI capabilities, but also frustration with downtime, concerns about job security, and skepticism towards OpenAI's direction. A sense of competition and rivalry is also present.\n\n*   **Hot Takes:**\n\n    *   \"OpenAI safety team is killing OpenAI\" - Suggests that safety measures are hindering innovation.\n    *   \"Bigger is not better\" - A contrarian view in Silicon Valley, implying a shift away from prioritizing scale.\n    *   The call to flood OpenAI's social media with complaints suggests a distrust of the company's responsiveness to user feedback.\n\n*   **Emerging Trends:**\n\n    *   **Focus on Data Agents:** The mention of OpenAI's in-house data agent suggests a growing interest in AI systems that can autonomously gather and process information.\n    *   **Competition Heating Up:** The constant comparisons between OpenAI and Anthropic indicate a more competitive landscape.\n    *   **Codex App Interest:** Multiple posts about the Codex app suggest a growing interest in this tool.\n\n*   **One-liner Summary:** The AI community is buzzing with competition between OpenAI and Anthropic, concerns about AI's impact, and debates over OpenAI's performance and future direction.\n",
+    "subreddits": [
+      "openai"
+    ]
+  },
+  {
     "timestamp": "2026-02-04T12:01:35.281Z",
     "postCount": 8,
     "topPosts": [

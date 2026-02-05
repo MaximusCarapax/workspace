@@ -54,9 +54,10 @@ if (!OPENROUTER_KEY) {
 
 // Model mapping for OpenRouter
 const OPENROUTER_MODELS = {
-  'gemini-2.5-flash': 'google/gemini-2.0-flash-001',  // 2.5 not on OR yet, use 2.0
-  'gemini-2.0-flash': 'google/gemini-2.0-flash-001',
-  'gemini-2.5-pro': 'google/gemini-2.0-flash-001',    // Fallback to flash
+  'gemini-2.5-flash': 'google/gemini-2.5-flash-lite',  // Lite for cost efficiency
+  'gemini-2.5-flash-lite': 'google/gemini-2.5-flash-lite',
+  'gemini-2.0-flash': 'google/gemini-2.5-flash-lite',  // Upgraded to 2.5-lite
+  'gemini-2.5-pro': 'google/gemini-2.5-flash-lite',    // Fallback to flash-lite
 };
 
 // Parse args
@@ -179,7 +180,7 @@ async function callOpenRouter(prompt) {
     throw new Error('OPENROUTER_API_KEY not found for fallback');
   }
   
-  const orModel = OPENROUTER_MODELS[model] || 'google/gemini-2.0-flash-001';
+  const orModel = OPENROUTER_MODELS[model] || 'google/gemini-2.5-flash-lite';
   
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',

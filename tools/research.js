@@ -194,7 +194,7 @@ function extractContent(html, url) {
 async function callGemini(prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      model: 'google/gemini-2.0-flash-001',
+      model: 'google/gemini-2.5-flash-lite',
       messages: [
         { role: 'system', content: 'You are a research assistant. Analyze the provided sources and answer the question. Be thorough but concise. Cite sources when making claims.' },
         { role: 'user', content: prompt }

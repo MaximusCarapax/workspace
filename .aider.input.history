@@ -272,3 +272,31 @@
 
 # 2026-02-05 00:16:32.441699
 +5. Update addMemory to optionally generate and store embeddings
+
+# 2026-02-05 00:47:20.006921
++Add Brave Search integration to research.js:
++
++1. Add new flag: -s or --search <query> that searches Brave first instead of taking URLs
++2. Load Brave API key from process.env.BRAVE_API_KEY or from /home/node/.openclaw/openclaw.json (tools.web.search.apiKey)
++3. Search Brave, take top 5 results, extract URLs
++4. Pass those URLs to the existing fetch+summarize flow
++5. Update help text
++
++Example usage:
++  node research.js -s 'domain registrar affiliate programs' -q 'What are the commission rates?'
++
++Keep the existing URL mode working too. The -s flag is optional - if not provided, URLs are required as before.
+
+# 2026-02-05 00:47:20.008110
++Add Brave Search integration to research.js:
++
++1. Add new flag: -s or --search <query> that searches Brave first instead of taking URLs
++2. Load Brave API key from process.env.BRAVE_API_KEY or from /home/node/.openclaw/openclaw.json (tools.web.search.apiKey)
++3. Search Brave, take top 5 results, extract URLs
++4. Pass those URLs to the existing fetch+summarize flow
++5. Update help text
++
++Example usage:
++  node research.js -s 'domain registrar affiliate programs' -q 'What are the commission rates?'
++
++Keep the existing URL mode working too. The -s flag is optional - if not provided, URLs are required as before.

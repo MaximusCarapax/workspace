@@ -66,7 +66,7 @@ async function callGemini(prompt) {
       'X-Title': 'OpenClaw Reddit Pulse'
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.0-flash-001',
+      model: 'google/gemini-2.5-flash-lite',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
       max_tokens: 2000
