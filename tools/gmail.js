@@ -14,6 +14,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const db = require('../lib/db');
 
 const CREDENTIALS_PATH = path.join(process.env.HOME, '.openclaw/secrets/credentials.json');
 
@@ -393,22 +394,13 @@ Usage:
         `);
     }
   } catch (err) {
+    db.logError({
+      source: 'gmail',
+      message: err.message,
+      details: `Gmail CLI command failed: ${cmd}`,
+      stack: err.stack
+    });
     console.error('Error:', err.message);
-    
-    // Log error to database
-    try {
-      const db = require('../lib/db');
-      db.logError({
-        level: 'error',
-        source: 'gmail.js',
-        message: err.message,
-        details: `Command: ${cmd}`,
-        stack: err.stack
-      });
-    } catch (dbError) {
-      console.error('Failed to log error to database:', dbError.message);
-    }
-    
     process.exit(1);
   }
 }

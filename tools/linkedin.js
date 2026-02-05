@@ -20,6 +20,7 @@ const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 const fs = require('fs');
 const path = require('path');
+const db = require('../lib/db');
 
 chromium.use(stealth);
 
@@ -739,22 +740,13 @@ async function main() {
         showHelp();
     }
   } catch (err) {
+    db.logError({
+      source: 'linkedin',
+      message: err.message,
+      details: `LinkedIn CLI command failed: ${command}`,
+      stack: err.stack
+    });
     console.error('❌ Error:', err.message);
-    
-    // Log error to database
-    try {
-      const db = require('../lib/db');
-      db.logError({
-        level: 'error',
-        source: 'linkedin.js',
-        message: err.message,
-        details: `Command: ${command}`,
-        stack: err.stack
-      });
-    } catch (dbError) {
-      console.error('Failed to log error to database:', dbError.message);
-    }
-    
     process.exit(1);
   }
 }
