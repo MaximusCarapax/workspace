@@ -393,3 +393,12 @@ node tools/voice-agent-call.js list                          # Recent calls
 
 **Auto-report:** By default, waits for call to complete and posts full transcript + outcome.
 
+
+## Hume AI Voice Agent (AU Number)
+- **Number:** +61 468 089 420
+- **Config ID:** 4d7c2310-e874-493c-b87c-55030cfbc3a3
+- **Voice:** Ito (male, American accent)
+- **LLM:** Claude 3.5 Sonnet
+- **Personality:** Max - Jason's AI assistant
+
+**Inbound calls:** Call the number, Hume EVI answers as Max.
