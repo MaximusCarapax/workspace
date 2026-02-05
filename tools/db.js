@@ -998,23 +998,14 @@ function pipelineShow(id, options = {}) {
     }
   }
   
-  console.log(`\n  📝 Notes (${notes.length}):`);
-  if (notes.length === 0) {
+  console.log(`\n  📝 Notes:`);
+  if (!item.notes) {
     console.log(`    No notes yet.`);
   } else {
-    for (const note of notes) {
-      const typeEmoji = {
-        'handover': '🔄',
-        'blocker': '🚫',
-        'question': '❓',
-        'decision': '✅',
-        'info': 'ℹ️',
-        'started': '🚀',
-        'progress': '📈',
-        'complete': '🏁'
-      }[note.note_type] || '📝';
-      console.log(`    ${typeEmoji} [${note.agent_role}] ${formatDate(note.created_at)}`);
-      console.log(`        ${note.content}`);
+    // Notes are stored as lines: "2026-02-05 08:21 [source] content"
+    const noteLines = item.notes.split('\n').filter(l => l.trim());
+    for (const line of noteLines) {
+      console.log(`    ${line}`);
     }
   }
   
@@ -1065,13 +1056,7 @@ function pipelineMove(id, stage, options = {}) {
   
   // Add note if provided
   if (options.note) {
-    db.addPipelineNote({
-      pipelineId: id,
-      agentRole: options.source || 'main',
-      noteType: 'progress',
-      content: options.note
-    });
-    console.log(`   Added note: ${options.note}`);
+    pipelineNote(id, options.note, { source: options.source || 'main' });
   }
 }
 
@@ -1082,21 +1067,21 @@ function pipelineNote(id, content, options = {}) {
     return;
   }
   
-  const noteType = options.type || 'info';
-  const validTypes = ['handover', 'blocker', 'question', 'decision', 'info', 'started', 'progress', 'complete'];
-  if (!validTypes.includes(noteType)) {
-    console.log(`Invalid note type. Must be one of: ${validTypes.join(', ')}`);
-    return;
-  }
+  const source = options.source || 'main';
+  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+  const newNote = `${timestamp} [${source}] ${content}`;
   
-  db.addPipelineNote({
-    pipelineId: id,
-    agentRole: options.source || 'main',
-    noteType: noteType,
-    content: content
-  });
+  // Prepend to existing notes (latest first)
+  const existingNotes = item.notes || '';
+  const updatedNotes = existingNotes ? `${newNote}\n${existingNotes}` : newNote;
   
-  console.log(`✅ Added ${noteType} note to pipeline #${id}: ${content}`);
+  // Update the notes column
+  db.db.prepare(`UPDATE pipeline SET notes = ?, updated_at = datetime('now') WHERE id = ?`).run(updatedNotes, id);
+  
+  // Log to activity
+  activity.log('pipeline_note', content, 'pipeline', { source, relatedId: `pipeline:${id}` });
+  
+  console.log(`✅ Added note to pipeline #${id}: ${content}`);
 }
 
 function pipelineAssign(id, agent) {
