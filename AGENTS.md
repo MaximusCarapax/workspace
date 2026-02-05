@@ -214,3 +214,16 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 ## Make It Yours
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+
+## Spec & Story Process
+
+### Spec Review Flow
+1. Write spec → `specs/<feature-name>.md`
+2. Send to spec-reviewer sub-agent
+3. **If REVISE:** Log feedback to feature notes, update spec, resubmit
+4. **If APPROVE:** Create stories from approved spec, then build
+
+### Key Rules
+- **Stories come AFTER spec approval** — not before
+- **Always log reviewer feedback** — whether APPROVE or REVISE
+- **I create stories** — reviewer validates, doesn't create

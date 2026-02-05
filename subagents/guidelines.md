@@ -21,6 +21,20 @@ All work flows through the dev pipeline. Check it first, use it always.
 2. Move to next stage
 3. Verify activity logged properly
 
+### Spec Review Process (for spec-reviewer persona)
+After reviewing a spec, **always report back with:**
+1. **Verdict:** APPROVE, REVISE, or REJECT
+2. **Key feedback:** What's good, what needs fixing
+3. **The main agent will log this to feature notes** — be specific
+
+### Logging Review Outcomes (for main agent)
+When spec-review returns:
+1. Log outcome + key feedback to feature notes: `pipeline note <id> "REVISE: <summary of feedback>"`
+2. If REVISE: Update spec, resubmit
+3. If APPROVE: NOW create stories from approved spec
+
+**Stories come AFTER spec approval, not before.**
+
 ### Pipeline Commands
 ```bash
 # See kanban board
