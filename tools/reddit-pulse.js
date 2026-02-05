@@ -35,78 +35,51 @@ function loadEnv() {
   }
 }
 
-// Gemini integration with multi-key support
+// Gemini via OpenRouter (no rate limits)
 async function callGemini(prompt) {
   loadEnv();
   
-  // Collect all available Gemini keys
-  const keys = [
-    process.env.GEMINI_API_KEY,
-    process.env.GEMINI_API_KEY_2,
-    process.env.GEMINI_API_KEY_3
-  ].filter(Boolean);
+  // Get OpenRouter API key
+  let apiKey = process.env.OPENROUTER_API_KEY;
   
-  if (keys.length === 0) {
-    throw new Error('No GEMINI_API_KEY set');
-  }
-
-  // Try each key with multiple models
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-  
-  for (const apiKey of keys) {
-    for (const model of models) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.3, maxOutputTokens: 2000 }
-            })
-          }
-        );
-
-        const data = await response.json();
-        if (data.error) {
-          if (data.error.message.includes('quota') || data.error.message.includes('rate')) {
-            console.log(`Key ${apiKey.slice(-4)} / ${model} rate limited, trying next...`);
-            continue;
-          }
-          throw new Error(data.error.message);
-        }
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      } catch (err) {
-        if (!err.message.includes('quota')) throw err;
+  // Try loading from secrets file if not in env
+  if (!apiKey) {
+    try {
+      const secretsPath = path.join(process.env.HOME, '.openclaw/secrets/openrouter.json');
+      if (fs.existsSync(secretsPath)) {
+        const secrets = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
+        apiKey = secrets.apiKey || secrets.OPENROUTER_API_KEY;
       }
-    }
+    } catch (e) {}
   }
   
-  // All keys exhausted - wait and retry once
-  console.log('All keys rate limited. Waiting 45s and retrying...');
-  await new Promise(r => setTimeout(r, 45000));
+  if (!apiKey) {
+    throw new Error('No OPENROUTER_API_KEY found in .env or secrets');
+  }
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://openclaw.ai',
+      'X-Title': 'OpenClaw Reddit Pulse'
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.0-flash-001',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 2000
+    })
+  });
+
+  const data = await response.json();
   
-  // One more attempt with first key + model
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${keys[0]}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 2000 }
-        })
-      }
-    );
-    const data = await response.json();
-    if (!data.error) {
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    }
-  } catch (e) {}
+  if (data.error) {
+    throw new Error(data.error.message || JSON.stringify(data.error));
+  }
   
-  throw new Error('All Gemini keys exhausted after retry. Try again later.');
+  return data.choices?.[0]?.message?.content || '';
 }
 
 // Parse simple XML (no external deps)
