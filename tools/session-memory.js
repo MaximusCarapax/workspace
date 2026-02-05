@@ -19,12 +19,141 @@ const { program } = require('commander');
 const db = require('../lib/db');
 const creds = require('../lib/credentials');
 
-// For topic extraction
+// For topic extraction and context generation
 let gemini;
 try {
     gemini = require('./gemini');
 } catch (e) {
     console.warn('Gemini module not available, topic extraction will be limited:', e.message);
+}
+
+// OpenRouter API key for context generation
+let OPENROUTER_KEY = null;
+try {
+    const envPath = path.join(__dirname, '..', '.env');
+    if (fs.existsSync(envPath)) {
+        const env = fs.readFileSync(envPath, 'utf8');
+        const orMatch = env.match(/OPENROUTER_API_KEY=(.+)/m);
+        if (orMatch) OPENROUTER_KEY = orMatch[1].trim();
+    }
+    if (!OPENROUTER_KEY) {
+        const secrets = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.openclaw/secrets/openrouter.json')));
+        OPENROUTER_KEY = secrets.api_key;
+    }
+} catch (e) {
+    // Will be loaded on demand
+}
+
+/**
+ * Generate contextual prefix for a chunk using Gemini via OpenRouter
+ * Returns ~50 token context string describing who/what/when
+ * 
+ * @param {Object} chunk - Chunk with content, timestamp, speakers, session_id
+ * @returns {Promise<{context: string, status: string}>}
+ */
+async function generateChunkContext(chunk) {
+    // Load OpenRouter key if not already loaded
+    if (!OPENROUTER_KEY) {
+        try {
+            const secrets = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.openclaw/secrets/openrouter.json')));
+            OPENROUTER_KEY = secrets.api_key;
+        } catch (e) {
+            return { context: null, status: 'failed' };
+        }
+    }
+    
+    if (!OPENROUTER_KEY) {
+        console.warn('OpenRouter API key not found, skipping context generation');
+        return { context: null, status: 'failed' };
+    }
+    
+    // Parse metadata
+    const speakers = typeof chunk.speakers === 'string' ? JSON.parse(chunk.speakers) : (chunk.speakers || []);
+    const speakerNames = speakers.map(s => s === 'user' ? 'Jason' : 'Max').join(' and ');
+    
+    let dateStr = 'unknown date';
+    try {
+        const date = new Date(chunk.timestamp);
+        dateStr = date.toLocaleDateString('en-AU', { 
+            weekday: 'long',
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric',
+            timeZone: 'Australia/Melbourne'
+        });
+    } catch (e) {}
+    
+    // Build prompt from spec
+    const prompt = `Given this chunk from a conversation transcript, write a brief context (1-2 sentences, ~50 tokens max) that explains:
+- Who is speaking (if identifiable)
+- What topic/decision this relates to
+- When this occurred (if timestamp available)
+
+Session: ${chunk.session_id || 'unknown'}
+Date: ${dateStr}
+Participants: ${speakerNames || 'Unknown'}
+
+Chunk:
+${chunk.content.substring(0, 1500)}
+
+Context (be concise, 1-2 sentences):`;
+
+    try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENROUTER_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://openclaw.ai',
+                'X-Title': 'OpenClaw Context Generation'
+            },
+            body: JSON.stringify({
+                model: 'google/gemini-2.5-flash-lite',  // Cheapest option
+                messages: [{ role: 'user', content: prompt }],
+                max_tokens: 100,  // Cap output to ~50-75 tokens
+                temperature: 0.3  // More deterministic
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            console.warn(`OpenRouter error for chunk context: ${response.status} - ${error}`);
+            return { context: null, status: 'failed' };
+        }
+
+        const data = await response.json();
+        const contextText = data.choices?.[0]?.message?.content?.trim();
+        
+        if (!contextText) {
+            return { context: null, status: 'failed' };
+        }
+        
+        // Log usage for cost tracking
+        const usage = data.usage || {};
+        const cost = ((usage.prompt_tokens || 0) * 0.075 + (usage.completion_tokens || 0) * 0.30) / 1_000_000;
+        
+        try {
+            const dbModule = require('../lib/db');
+            dbModule.logUsage({
+                model: 'google/gemini-2.5-flash-lite',
+                provider: 'openrouter',
+                tokensIn: usage.prompt_tokens || 0,
+                tokensOut: usage.completion_tokens || 0,
+                costUsd: cost,
+                taskType: 'tool',
+                taskDetail: 'session-memory context generation'
+            });
+        } catch (e) {}
+        
+        return { 
+            context: `[Context: ${contextText}]`, 
+            status: 'complete' 
+        };
+        
+    } catch (error) {
+        console.warn(`Context generation failed: ${error.message}`);
+        return { context: null, status: 'failed' };
+    }
 }
 
 // For embeddings
@@ -247,17 +376,8 @@ class SessionChunker {
     }
     
     async extractTopics(content) {
-        // Try to use Gemini if available
-        if (gemini && gemini.extractTopics) {
-            try {
-                return await gemini.extractTopics(content);
-            } catch (e) {
-                console.warn('Gemini topic extraction failed:', e.message);
-                // Fall through to keyword extraction
-            }
-        }
-        
-        // Fallback: simple keyword extraction
+        // Use simple keyword extraction (no external API dependencies)
+        // This is fast, free, and reliable
         const keywords = this.extractKeywords(content);
         return keywords.slice(0, 3); // Max 3 topics
     }
@@ -311,7 +431,7 @@ class SessionChunker {
 ${chunkContent}`;
     }
     
-    async processSession(sessionId, sessionData) {
+    async processSession(sessionId, sessionData, options = {}) {
         console.log(`Processing session: ${sessionId}`);
         
         const messages = this.extractMessages(sessionData);
@@ -321,6 +441,8 @@ ${chunkContent}`;
             console.warn(`Warning: Session ${sessionId} has ${chunks.length} chunks, capping at ${MAX_CHUNKS_PER_SESSION}`);
             chunks.splice(MAX_CHUNKS_PER_SESSION);
         }
+        
+        const generateContext = options.generateContext !== false; // Default to true
         
         // Process chunks in batches
         const results = [];
@@ -333,7 +455,22 @@ ${chunkContent}`;
                 const hasDecision = this.detectDecisions(chunk.content);
                 const hasAction = this.detectActions(chunk.content);
                 
-                // Create context content
+                // Generate LLM context prefix if enabled
+                let contextPrefix = null;
+                let contextStatus = 'pending';
+                
+                if (generateContext) {
+                    const contextResult = await generateChunkContext({
+                        content: chunk.content,
+                        timestamp: chunk.timestamp,
+                        speakers: chunk.speakers,
+                        session_id: sessionId
+                    });
+                    contextPrefix = contextResult.context;
+                    contextStatus = contextResult.status;
+                }
+                
+                // Create context content (legacy field, still useful)
                 const contextContent = this.createContextContent(chunk.content, {
                     session_id: sessionId,
                     timestamp: chunk.timestamp,
@@ -351,6 +488,8 @@ ${chunkContent}`;
                     has_action: hasAction ? 1 : 0,
                     content: chunk.content,
                     context_content: contextContent,
+                    context_prefix: contextPrefix,
+                    context_status: contextStatus,
                     token_count: chunk.token_count
                 };
                 
@@ -501,12 +640,28 @@ async function createTables() {
             has_action INTEGER DEFAULT 0,
             content TEXT NOT NULL,
             context_content TEXT,
+            context_prefix TEXT,
+            context_status TEXT DEFAULT 'pending',
             token_count INTEGER,
             embedding BLOB,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(session_id, chunk_index)
         )
     `);
+    
+    // Migration: Add context columns if they don't exist (for existing databases)
+    try {
+        sqlite.exec(`ALTER TABLE session_chunks ADD COLUMN context_prefix TEXT`);
+        console.log('✓ Added context_prefix column');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+    try {
+        sqlite.exec(`ALTER TABLE session_chunks ADD COLUMN context_status TEXT DEFAULT 'pending'`);
+        console.log('✓ Added context_status column');
+    } catch (e) {
+        // Column already exists, ignore
+    }
     
     // Create sqlite-vec virtual table for vector search if extension is loaded
     if (sqliteVec) {
@@ -595,6 +750,21 @@ async function processSessionFile(chunker, sessionId, filepath) {
         console.warn(`Warnings for ${sessionId}:`, validation.warnings.join(', '));
     }
     
+    // Open database early for hash check
+    const Database = require('better-sqlite3');
+    const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+    const sqlite = new Database(dbPath);
+    
+    // 1. HASH CHECK - skip unchanged files
+    const currentHash = computeFileHash(filepath);
+    const existingState = sqlite.prepare('SELECT file_hash, chunk_count FROM session_index_state WHERE session_id = ?').get(sessionId);
+    
+    if (existingState && existingState.file_hash === currentHash) {
+        console.log(`Skipping ${sessionId} - unchanged (${existingState.chunk_count} chunks already indexed)`);
+        sqlite.close();
+        return;
+    }
+    
     // Read and parse session data
     const content = fs.readFileSync(filepath, 'utf8');
     const lines = content.split('\n').filter(line => line.trim());
@@ -609,25 +779,71 @@ async function processSessionFile(chunker, sessionId, filepath) {
         }
     }
     
-    // Process session
-    const chunks = await chunker.processSession(sessionId, sessionData);
+    // 2. INCREMENTAL CHUNKING - only process new messages
+    // Get the last chunk's timestamp and index for this session
+    const lastChunk = sqlite.prepare(`
+        SELECT MAX(chunk_index) as last_index, MAX(timestamp) as last_timestamp 
+        FROM session_chunks 
+        WHERE session_id = ?
+    `).get(sessionId);
     
-    // Store in database
-    const Database = require('better-sqlite3');
-    const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
-    const sqlite = new Database(dbPath);
+    const lastTimestamp = lastChunk?.last_timestamp || null;
+    const lastIndex = lastChunk?.last_index ?? -1;
     
-    // Clear existing chunks for this session
-    sqlite.prepare('DELETE FROM session_chunks WHERE session_id = ?').run(sessionId);
+    // Filter session data to only new messages (after last indexed timestamp)
+    let newSessionData = sessionData;
+    if (lastTimestamp) {
+        newSessionData = sessionData.filter(item => {
+            if (item.type !== 'message' || !item.timestamp) return false;
+            return item.timestamp > lastTimestamp;
+        });
+        
+        if (newSessionData.length === 0) {
+            // Hash changed but no new messages - might be metadata change, update hash only
+            console.log(`${sessionId} - file changed but no new messages, updating hash`);
+            const now = new Date().toISOString();
+            sqlite.prepare(`
+                UPDATE session_index_state 
+                SET file_hash = ?, last_indexed = ?
+                WHERE session_id = ?
+            `).run(currentHash, now, sessionId);
+            sqlite.close();
+            return;
+        }
+        
+        console.log(`${sessionId} - found ${newSessionData.length} new messages (after ${lastTimestamp})`);
+    }
     
-    // Insert new chunks
+    // Reset chunker's chunkId to continue from last index
+    chunker.chunkId = lastIndex + 1;
+    
+    // Process only new messages
+    const newChunks = await chunker.processSession(sessionId, newSessionData);
+    
+    if (newChunks.length === 0) {
+        console.log(`${sessionId} - no new chunks generated`);
+        // Still update the hash
+        const now = new Date().toISOString();
+        sqlite.prepare(`
+            UPDATE session_index_state 
+            SET file_hash = ?, last_indexed = ?
+            WHERE session_id = ?
+        `).run(currentHash, now, sessionId);
+        sqlite.close();
+        return;
+    }
+    
+    // 3. INSERT NEW CHUNKS (don't delete existing!)
     const insertStmt = sqlite.prepare(`
         INSERT INTO session_chunks 
-        (session_id, chunk_index, timestamp, speakers, topic_tags, has_decision, has_action, content, context_content, token_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (session_id, chunk_index, timestamp, speakers, topic_tags, has_decision, has_action, content, context_content, context_prefix, context_status, token_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    for (const chunk of chunks) {
+    let contextComplete = 0;
+    let contextFailed = 0;
+    
+    for (const chunk of newChunks) {
         insertStmt.run(
             chunk.session_id,
             chunk.chunk_index,
@@ -637,13 +853,19 @@ async function processSessionFile(chunker, sessionId, filepath) {
             chunk.has_decision,
             chunk.has_action,
             chunk.content,
-            chunk.context_content || chunk.content, // Fallback to regular content if context not available
+            chunk.context_content || chunk.content,
+            chunk.context_prefix,
+            chunk.context_status || 'pending',
             chunk.token_count
         );
+        
+        if (chunk.context_status === 'complete') contextComplete++;
+        if (chunk.context_status === 'failed') contextFailed++;
     }
     
-    // Update index state
-    const fileHash = computeFileHash(filepath);
+    // 4. UPDATE INDEX STATE - track total chunks
+    const totalChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE session_id = ?').get(sessionId)?.count || 0;
+    
     const now = new Date().toISOString();
     const upsertStmt = sqlite.prepare(`
         INSERT INTO session_index_state (session_id, file_path, file_hash, last_indexed, chunk_count, status)
@@ -658,14 +880,24 @@ async function processSessionFile(chunker, sessionId, filepath) {
     upsertStmt.run(
         sessionId,
         filepath,
-        fileHash,
+        currentHash,
         now,
-        chunks.length,
+        totalChunks,
         'chunked'
     );
     
     sqlite.close();
-    console.log(`Processed ${chunks.length} chunks for session ${sessionId}`);
+    
+    if (lastTimestamp) {
+        console.log(`Added ${newChunks.length} new chunks for session ${sessionId} (total: ${totalChunks})`);
+    } else {
+        console.log(`Processed ${newChunks.length} chunks for session ${sessionId}`);
+    }
+    
+    // Log context generation stats
+    if (contextComplete > 0 || contextFailed > 0) {
+        console.log(`  Context: ${contextComplete} complete, ${contextFailed} failed`);
+    }
 }
 
 
@@ -713,16 +945,37 @@ async function statusCommand() {
         const indexedSessions = sqlite.prepare('SELECT COUNT(*) as count FROM session_index_state').get()?.count || 0;
         const failedSessions = sqlite.prepare("SELECT COUNT(*) as count FROM session_index_state WHERE status = 'failed'").get()?.count || 0;
         
+        // Context generation stats
+        let contextComplete = 0, contextFailed = 0, contextPending = 0;
+        try {
+            contextComplete = sqlite.prepare("SELECT COUNT(*) as count FROM session_chunks WHERE context_status = 'complete'").get()?.count || 0;
+            contextFailed = sqlite.prepare("SELECT COUNT(*) as count FROM session_chunks WHERE context_status = 'failed'").get()?.count || 0;
+            contextPending = sqlite.prepare("SELECT COUNT(*) as count FROM session_chunks WHERE context_status = 'pending' OR context_status IS NULL").get()?.count || 0;
+        } catch (e) {
+            // columns might not exist yet
+        }
+        
+        // Embedding stats
+        const embeddedChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE embedding IS NOT NULL').get()?.count || 0;
+        
         sqlite.close();
         
         console.log('\n📊 Session Memory Status');
-        console.log('======================');
+        console.log('========================');
         console.log(`Total chunks: ${totalChunks}`);
         console.log(`Total sessions: ${totalSessions}`);
         console.log(`Indexed sessions: ${indexedSessions}`);
         console.log(`Failed sessions: ${failedSessions}`);
         console.log(`Average tokens per chunk: ${avgTokens.toFixed(1)}`);
         console.log(`Chunks created in last 24h: ${recentChunks}`);
+        
+        console.log('\n🧠 Context Generation');
+        console.log(`  Complete: ${contextComplete}`);
+        console.log(`  Failed: ${contextFailed}`);
+        console.log(`  Pending: ${contextPending}`);
+        
+        console.log('\n🔢 Embeddings');
+        console.log(`  Embedded: ${embeddedChunks}/${totalChunks}`);
         
     } catch (error) {
         console.error('Error getting status:', error.message);
@@ -881,8 +1134,16 @@ async function embedCommand(options) {
             
             for (const chunk of batch) {
                 try {
-                    // Use context_content if available, otherwise use content
-                    const textToEmbed = chunk.context_content || chunk.content;
+                    // Use context_prefix + content if available (Anthropic contextual RAG approach)
+                    // Fall back to context_content, then raw content
+                    let textToEmbed;
+                    if (chunk.context_prefix) {
+                        textToEmbed = `${chunk.context_prefix}\n\n${chunk.content}`;
+                    } else if (chunk.context_content) {
+                        textToEmbed = chunk.context_content;
+                    } else {
+                        textToEmbed = chunk.content;
+                    }
                     const embedding = await embeddingGenerator.generateEmbedding(textToEmbed);
                     
                     // Convert embedding to Buffer for storage
@@ -1104,6 +1365,125 @@ function cosineSimilarity(a, b) {
     return dotProduct / (normA * normB);
 }
 
+async function backfillContextCommand(options) {
+    try {
+        await createTables();
+        
+        const Database = require('better-sqlite3');
+        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+        const sqlite = new Database(dbPath);
+        
+        const batchSize = parseInt(options.batch) || 100;
+        const reembed = options.reembed !== false; // Default to true
+        
+        // Find chunks without context_prefix
+        const pendingChunks = sqlite.prepare(`
+            SELECT id, session_id, content, timestamp, speakers, context_status
+            FROM session_chunks 
+            WHERE context_prefix IS NULL 
+            ORDER BY timestamp DESC
+            LIMIT ?
+        `).all(batchSize);
+        
+        if (pendingChunks.length === 0) {
+            console.log('✓ All chunks already have context. Nothing to backfill.');
+            sqlite.close();
+            return;
+        }
+        
+        console.log(`Found ${pendingChunks.length} chunks without context (batch size: ${batchSize})`);
+        console.log('Generating context via Gemini/OpenRouter...\n');
+        
+        // Prepare update statement
+        const updateStmt = sqlite.prepare(`
+            UPDATE session_chunks 
+            SET context_prefix = ?, context_status = ?, embedding = NULL
+            WHERE id = ?
+        `);
+        
+        let completed = 0;
+        let failed = 0;
+        const chunksToReembed = [];
+        
+        for (let i = 0; i < pendingChunks.length; i++) {
+            const chunk = pendingChunks[i];
+            
+            // Generate context
+            const result = await generateChunkContext({
+                content: chunk.content,
+                timestamp: chunk.timestamp,
+                speakers: chunk.speakers,
+                session_id: chunk.session_id
+            });
+            
+            // Update database
+            updateStmt.run(result.context, result.status, chunk.id);
+            
+            if (result.status === 'complete') {
+                completed++;
+                chunksToReembed.push(chunk.id);
+            } else {
+                failed++;
+            }
+            
+            // Progress indicator
+            if ((i + 1) % 10 === 0 || i === pendingChunks.length - 1) {
+                process.stdout.write(`\rProgress: ${i + 1}/${pendingChunks.length} (${completed} complete, ${failed} failed)`);
+            }
+            
+            // Rate limiting - slight delay between requests
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        console.log('\n');
+        
+        // Show remaining count
+        const remaining = sqlite.prepare(`
+            SELECT COUNT(*) as count FROM session_chunks WHERE context_prefix IS NULL
+        `).get()?.count || 0;
+        
+        console.log(`\n📊 Backfill Results:`);
+        console.log(`  Processed: ${pendingChunks.length}`);
+        console.log(`  Complete: ${completed}`);
+        console.log(`  Failed: ${failed}`);
+        console.log(`  Remaining: ${remaining}`);
+        
+        // Re-embed chunks with new context
+        if (reembed && chunksToReembed.length > 0) {
+            console.log(`\n🔄 Re-embedding ${chunksToReembed.length} chunks with new context...`);
+            
+            // Clear embeddings for updated chunks so embed command will regenerate them
+            sqlite.prepare(`
+                UPDATE session_chunks 
+                SET embedding = NULL 
+                WHERE id IN (${chunksToReembed.join(',')})
+            `).run();
+            
+            // Delete from session_embeddings
+            try {
+                sqlite.prepare(`
+                    DELETE FROM session_embeddings 
+                    WHERE chunk_id IN (${chunksToReembed.join(',')})
+                `).run();
+            } catch (e) {
+                // session_embeddings might not exist
+            }
+            
+            console.log(`  Cleared ${chunksToReembed.length} embeddings. Run 'embed --all' to regenerate.`);
+        }
+        
+        if (remaining > 0) {
+            console.log(`\n💡 Run 'backfill-context --batch ${batchSize}' again to process more chunks.`);
+        }
+        
+        sqlite.close();
+        
+    } catch (error) {
+        console.error('Error during backfill:', error.message);
+        process.exit(1);
+    }
+}
+
 async function healthCommand() {
     try {
         const Database = require('better-sqlite3');
@@ -1186,6 +1566,13 @@ program
     .command('health')
     .description('Show health status of session memory system')
     .action(healthCommand);
+
+program
+    .command('backfill-context')
+    .description('Generate context for existing chunks without context_prefix')
+    .option('--batch <n>', 'Number of chunks to process (default: 100)', '100')
+    .option('--no-reembed', 'Skip clearing embeddings (will need manual re-embed)')
+    .action(backfillContextCommand);
 
 program
     .command('embed')

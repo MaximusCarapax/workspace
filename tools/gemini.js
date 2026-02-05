@@ -225,7 +225,7 @@ async function extractTopics(text) {
         }
         
         const apiKey = GEMINI_KEYS[0];
-        const model = 'gemini-1.5-flash';
+        const model = 'gemini-2.0-flash';
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         
         const prompt = `Extract 1-3 main topic tags from the following conversation chunk. 

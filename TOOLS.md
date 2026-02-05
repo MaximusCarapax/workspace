@@ -144,6 +144,30 @@ node tools/twilio-webhook-server.js [port]   # Default: 3000
 - twilio_auth_token
 - twilio_phone_number
 
+## Session Memory RAG 🧠
+Searchable index of all conversation transcripts:
+```bash
+node tools/session-memory.js status              # Check index health
+node tools/session-memory.js chunk --all         # Index new conversations (incremental!)
+node tools/session-memory.js embed --all         # Generate embeddings
+node tools/session-memory.js embed --status      # Check embedding progress
+node tools/session-memory.js search "query"      # Semantic search
+node tools/session-memory.js search "query" --after "2026-02-05" --limit 10
+node tools/session-memory.js backfill-context --batch 100  # Add context to old chunks
+```
+
+**Auto-indexing:** Crons run every 5 min during active hours (8am-12pm, 5pm-11pm Melbourne).
+
+**Incremental chunking:** Only processes NEW messages since last chunk. Unchanged sessions skipped via hash check.
+
+**Contextual RAG:** New chunks get LLM-generated context prepended before embedding (via Gemini/OpenRouter).
+
+**Post-compaction recovery:**
+1. Run `chunk --all` first (indexes recent conversation)
+2. Then `search` to find what you forgot
+
+**Note:** Embeddings use OpenAI text-embedding-3-small. Context generation uses Gemini via OpenRouter.
+
 ## TOTP Manager
 Generate 2FA codes independently without phone/app:
 ```bash

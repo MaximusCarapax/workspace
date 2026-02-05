@@ -19,10 +19,13 @@ Don't ask permission. Just do it.
 
 ### 🔄 After Compaction
 If you see "Summary unavailable" or a compaction summary at session start, context was lost. Recover with:
-1. `node tools/db.js activity --limit 20` — what did I do recently? (fast, structured)
-2. `memory_search` — deeper context on specific topics if needed
+1. **FIRST:** `node tools/session-memory.js chunk` — index the latest conversation before searching!
+2. `node tools/db.js activity --limit 20` — what did I do recently? (fast, structured)
+3. `memory_search` or `session-memory.js search` — deeper context on specific topics
 
-The activity log is your structured audit trail. Session transcripts have richer context. Use both.
+The activity log is your structured audit trail. Session transcripts have richer context. **Always chunk first after compaction** — RAG may be stale.
+
+The chunking step ensures the conversation we just "forgot" is now searchable.
 
 ## Memory
 
