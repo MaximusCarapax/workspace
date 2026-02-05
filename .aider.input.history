@@ -236,3 +236,15 @@
 
 # 2026-02-04 23:51:25.333969
 +1. Add a new function `getCostsDailyBySource(days = 7)` in lib/db.js that queries the token_usage table and returns costs grouped by day and source
+
+# 2026-02-05 00:00:35.400670
++Add embedding support to the memory system. Requirements:
+
+# 2026-02-05 00:01:36.778817
++1. Add `embedding` BLOB column to the memory table schema 
+
+# 2026-02-05 00:02:23.218838
++Add generateEmbedding function using Gemini text-embedding-004 via OpenRouter API at https://openrouter.ai/api/v1/embeddings. Use require('./lib/credentials').get('openrouter') for API key. Function should take text string and return Float32Array of embedding vector.
+
+# 2026-02-05 00:02:24.584434
++2. Create `generateEmbedding` function that calls OpenAI text-embedding-3-small API
