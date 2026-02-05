@@ -1320,26 +1320,46 @@ async function searchCommand(query, options) {
             filterParams.push(`%"${options.topic}"%`);
         }
         
-        const filterClause = filterConditions.length > 0 ? 'WHERE ' + filterConditions.join(' AND ') + ' AND' : 'WHERE';
-        
         // 1. Run embedding search (cosine similarity)
         console.log('Running embedding search...');
-        const embeddingSql = `
-            SELECT 
-                sc.id,
-                sc.session_id,
-                sc.timestamp,
-                sc.speakers,
-                sc.topic_tags,
-                sc.content,
-                sc.embedding,
-                sc.has_decision,
-                sc.has_action
-            FROM session_chunks sc
-            ${filterClause} sc.embedding IS NOT NULL
-        `;
+        let embeddingSql;
+        let embeddingParams;
         
-        const allChunks = sqlite.prepare(embeddingSql).all(...filterParams);
+        if (filterConditions.length > 0) {
+            embeddingSql = `
+                SELECT 
+                    sc.id,
+                    sc.session_id,
+                    sc.timestamp,
+                    sc.speakers,
+                    sc.topic_tags,
+                    sc.content,
+                    sc.embedding,
+                    sc.has_decision,
+                    sc.has_action
+                FROM session_chunks sc
+                WHERE ${filterConditions.join(' AND ')} AND sc.embedding IS NOT NULL
+            `;
+            embeddingParams = [...filterParams];
+        } else {
+            embeddingSql = `
+                SELECT 
+                    sc.id,
+                    sc.session_id,
+                    sc.timestamp,
+                    sc.speakers,
+                    sc.topic_tags,
+                    sc.content,
+                    sc.embedding,
+                    sc.has_decision,
+                    sc.has_action
+                FROM session_chunks sc
+                WHERE sc.embedding IS NOT NULL
+            `;
+            embeddingParams = [];
+        }
+        
+        const allChunks = sqlite.prepare(embeddingSql).all(...embeddingParams);
         
         if (allChunks.length === 0) {
             console.log('No chunks found matching the filters.');
