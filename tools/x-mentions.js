@@ -221,12 +221,20 @@ async function checkMentions(showAll = false) {
       usedFallback = true;
       console.log(`✓ Using X API (${result.quotaUsed}/100 reads this month)`);
     } catch (apiError) {
-      db.logError({
-        source: 'x-mentions',
-        message: apiError.message,
-        details: 'Failed to check mentions via both Bird CLI and X API',
-        stack: apiError.stack
-      });
+      // Log error to database
+      try {
+        const db = require('../lib/db');
+        db.logError({
+          level: 'error',
+          source: 'x-mentions.js',
+          message: apiError.message,
+          details: 'Failed to check mentions via both Bird CLI and X API',
+          stack: apiError.stack
+        });
+      } catch (dbError) {
+        console.error('Failed to log error to database:', dbError.message);
+      }
+      
       console.error(`✗ X API also failed: ${apiError.message}`);
       return { error: 'Both Bird CLI and X API failed', details: { birdError: birdError.message, apiError: apiError.message } };
     }
@@ -284,6 +292,20 @@ async function replyToMention(tweetId, text) {
     });
     return { success: true, output: result };
   } catch (e) {
+    // Log error to database
+    try {
+      const db = require('../lib/db');
+      db.logError({
+        level: 'error',
+        source: 'x-mentions.js',
+        message: e.message,
+        details: `Failed to reply to mention ${tweetId}`,
+        stack: e.stack
+      });
+    } catch (dbError) {
+      console.error('Failed to log error to database:', dbError.message);
+    }
+    
     return { success: false, error: e.message };
   }
 }
