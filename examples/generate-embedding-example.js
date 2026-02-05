@@ -60,8 +60,8 @@ async function main() {
     console.log(`   Embedding stored for memory ${result.memoryId}`);
     console.log(`   Model: ${result.model}, Dimensions: ${result.dimensions}`);
     
-    // Example 3: Search for similar memories
-    console.log('\n3. Searching for similar memories ---');
+    // Example 3: Search for similar memories using embedding
+    console.log('\n3. Searching for similar memories using embedding ---');
     const searchResults = db.searchMemoryByEmbedding({
       model: 'text-embedding-3-small',
       embedding: embedding,
@@ -69,7 +69,25 @@ async function main() {
       threshold: 0.8
     });
     
-    console.log(`   Found ${searchResults.length} similar memories`);
+    console.log(`   Found ${searchResults.length} similar memories using embedding search`);
+    
+    // Example 4: Semantic search using text query
+    console.log('\n4. Semantic search using text query ---');
+    const semanticQuery = "fast animal jumping over a sleeping dog";
+    console.log(`   Query: "${semanticQuery}"`);
+    
+    const semanticResults = await db.semanticSearchMemory(semanticQuery, {
+      model: 'text-embedding-3-small',
+      limit: 3,
+      threshold: 0.7,
+      sessionId: 'example-session',
+      source: 'example'
+    });
+    
+    console.log(`   Found ${semanticResults.length} semantically similar memories`);
+    if (semanticResults.length > 0) {
+      console.log(`   Best match similarity: ${(semanticResults[0].similarity * 100).toFixed(1)}%`);
+    }
     
     console.log('\n✅ All examples completed successfully!');
     

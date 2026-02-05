@@ -47,6 +47,9 @@ try {
   console.log('     console.log(\'Dimensions:\', e.length);');
   console.log('   }).catch(console.error);"');
   
+  console.log('\nTo test semantic search:');
+  console.log('   node test-semantic-search.js');
+  
 } catch (error) {
   console.error('\n❌ Failed to load embeddings module:', error.message);
   process.exit(1);
