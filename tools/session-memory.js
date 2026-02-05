@@ -678,6 +678,34 @@ async function createTables() {
         }
     }
     
+    // Create FTS5 virtual table for BM25 search
+    try {
+        sqlite.exec(`
+            CREATE VIRTUAL TABLE IF NOT EXISTS session_chunks_fts USING fts5(
+                chunk_id UNINDEXED,
+                content,
+                tokenize = 'porter'
+            )
+        `);
+        console.log('✓ FTS5 table created for BM25 search');
+        
+        // Populate FTS5 table with existing chunks if empty
+        const ftsCount = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks_fts').get()?.count || 0;
+        if (ftsCount === 0) {
+            const chunkCount = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks').get()?.count || 0;
+            if (chunkCount > 0) {
+                console.log(`Populating FTS5 table with ${chunkCount} existing chunks...`);
+                sqlite.exec(`
+                    INSERT INTO session_chunks_fts (chunk_id, content)
+                    SELECT id, content FROM session_chunks
+                `);
+                console.log('✓ FTS5 table populated');
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to create or populate FTS5 table:', e.message);
+    }
+    
     // Create session_index_state table for tracking
     sqlite.exec(`
         CREATE TABLE IF NOT EXISTS session_index_state (
@@ -839,12 +867,19 @@ async function processSessionFile(chunker, sessionId, filepath) {
         (session_id, chunk_index, timestamp, speakers, topic_tags, has_decision, has_action, content, context_content, context_prefix, context_status, token_count)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    
+        
+    // Prepare FTS5 insert statement
+    const insertFtsStmt = sqlite.prepare(`
+        INSERT INTO session_chunks_fts (chunk_id, content)
+        VALUES (?, ?)
+    `);
+        
     let contextComplete = 0;
     let contextFailed = 0;
-    
+        
     for (const chunk of newChunks) {
-        insertStmt.run(
+        // Insert into main table
+        const result = insertStmt.run(
             chunk.session_id,
             chunk.chunk_index,
             chunk.timestamp,
@@ -858,7 +893,16 @@ async function processSessionFile(chunker, sessionId, filepath) {
             chunk.context_status || 'pending',
             chunk.token_count
         );
-        
+            
+        const chunkId = result.lastInsertRowid;
+            
+        // Insert into FTS5 table for BM25 search
+        try {
+            insertFtsStmt.run(chunkId, chunk.content);
+        } catch (e) {
+            console.warn(`Failed to insert into FTS5 table for chunk ${chunkId}:`, e.message);
+        }
+            
         if (chunk.context_status === 'complete') contextComplete++;
         if (chunk.context_status === 'failed') contextFailed++;
     }
@@ -1233,8 +1277,32 @@ async function searchCommand(query, options) {
         console.log(`🔍 Searching for: "${query}"`);
         const queryEmbedding = await embeddingGenerator.generateEmbedding(query);
         
-        // Build the SQL query with filters
-        let sqlQuery = `
+        // Build base filter conditions
+        let filterConditions = [];
+        const filterParams = [];
+        
+        // Add date filters
+        if (options.after) {
+            filterConditions.push('sc.timestamp >= ?');
+            filterParams.push(new Date(options.after).toISOString());
+        }
+        
+        if (options.before) {
+            filterConditions.push('sc.timestamp <= ?');
+            filterParams.push(new Date(options.before).toISOString());
+        }
+        
+        // Add topic filter
+        if (options.topic) {
+            filterConditions.push('sc.topic_tags LIKE ?');
+            filterParams.push(`%"${options.topic}"%`);
+        }
+        
+        const filterClause = filterConditions.length > 0 ? 'WHERE ' + filterConditions.join(' AND ') : '';
+        
+        // 1. Run embedding search (cosine similarity)
+        console.log('Running embedding search...');
+        const embeddingSql = `
             SELECT 
                 sc.id,
                 sc.session_id,
@@ -1246,60 +1314,132 @@ async function searchCommand(query, options) {
                 sc.has_decision,
                 sc.has_action
             FROM session_chunks sc
-            WHERE sc.embedding IS NOT NULL
+            ${filterClause}
+            AND sc.embedding IS NOT NULL
         `;
         
-        const params = [];
+        const allChunks = sqlite.prepare(embeddingSql).all(...filterParams);
         
-        // Add date filters
-        if (options.after) {
-            sqlQuery += ' AND sc.timestamp >= ?';
-            params.push(new Date(options.after).toISOString());
-        }
-        
-        if (options.before) {
-            sqlQuery += ' AND sc.timestamp <= ?';
-            params.push(new Date(options.before).toISOString());
-        }
-        
-        // Add topic filter
-        if (options.topic) {
-            sqlQuery += ' AND sc.topic_tags LIKE ?';
-            params.push(`%"${options.topic}"%`);
-        }
-        
-        sqlQuery += ' ORDER BY sc.timestamp DESC';
-        
-        // Get all matching chunks
-        const chunks = sqlite.prepare(sqlQuery).all(...params);
-        
-        if (chunks.length === 0) {
+        if (allChunks.length === 0) {
             console.log('No chunks found matching the filters.');
             sqlite.close();
             return;
         }
         
-        console.log(`Found ${chunks.length} chunks to search...`);
-        
         // Calculate cosine similarity for each chunk
-        const results = chunks.map(chunk => {
+        const embeddingResults = allChunks.map(chunk => {
             const embedding = embeddingGenerator.bufferToEmbedding(chunk.embedding);
             const similarity = cosineSimilarity(queryEmbedding, embedding);
             
             return {
                 ...chunk,
-                relevance_score: similarity
+                embedding_score: similarity
             };
         });
         
-        // Sort by relevance and limit
+        // Sort by embedding score
+        embeddingResults.sort((a, b) => b.embedding_score - a.embedding_score);
+        
+        // 2. Run BM25 search using FTS5
+        console.log('Running BM25 keyword search...');
+        let bm25Results = [];
+        try {
+            // Escape query for FTS5
+            const ftsQuery = query.split(/\s+/)
+                .map(term => `"${term}"*`)
+                .join(' ');
+            
+            const bm25Sql = `
+                SELECT 
+                    sc.id,
+                    sc.session_id,
+                    sc.timestamp,
+                    sc.speakers,
+                    sc.topic_tags,
+                    sc.content,
+                    sc.embedding,
+                    sc.has_decision,
+                    sc.has_action,
+                    fts.rank as bm25_score
+                FROM session_chunks_fts fts
+                JOIN session_chunks sc ON fts.chunk_id = sc.id
+                WHERE fts.content MATCH ?
+                ${filterConditions.length > 0 ? 'AND ' + filterConditions.join(' AND ') : ''}
+                ORDER BY fts.rank
+                LIMIT 100
+            `;
+            
+            const bm25Params = [ftsQuery, ...filterParams];
+            bm25Results = sqlite.prepare(bm25Sql).all(...bm25Params);
+            
+            // Normalize BM25 scores (higher is better in FTS5 rank)
+            if (bm25Results.length > 0) {
+                // FTS5 rank is lower for better matches, so invert
+                const maxRank = Math.max(...bm25Results.map(r => r.bm25_score));
+                bm25Results.forEach(r => {
+                    r.bm25_score = maxRank > 0 ? (maxRank - r.bm25_score + 1) / maxRank : 1;
+                });
+            }
+        } catch (e) {
+            console.warn('BM25 search failed:', e.message);
+            bm25Results = [];
+        }
+        
+        // 3. Combine results using Reciprocal Rank Fusion (RRF)
+        console.log('Combining results with RRF...');
+        const k = 60; // Standard constant from spec
+        
+        // Create maps to store RRF scores
+        const rrfScores = new Map();
+        
+        // Process embedding results
+        embeddingResults.forEach((result, index) => {
+            const chunkId = result.id;
+            const rank = index + 1;
+            const score = 1.0 / (k + rank);
+            rrfScores.set(chunkId, (rrfScores.get(chunkId) || 0) + score);
+        });
+        
+        // Process BM25 results
+        bm25Results.forEach((result, index) => {
+            const chunkId = result.id;
+            const rank = index + 1;
+            const score = 1.0 / (k + rank);
+            rrfScores.set(chunkId, (rrfScores.get(chunkId) || 0) + score);
+        });
+        
+        // Combine all unique chunks
+        const allResultsMap = new Map();
+        [...embeddingResults, ...bm25Results].forEach(result => {
+            if (!allResultsMap.has(result.id)) {
+                allResultsMap.set(result.id, result);
+            }
+        });
+        
+        // Create final results with RRF scores
+        const combinedResults = Array.from(allResultsMap.values()).map(result => {
+            const rrfScore = rrfScores.get(result.id) || 0;
+            return {
+                ...result,
+                rrf_score: rrfScore,
+                embedding_score: result.embedding_score || 0,
+                bm25_score: result.bm25_score || 0
+            };
+        });
+        
+        // Sort by RRF score
+        combinedResults.sort((a, b) => b.rrf_score - a.rrf_score);
+        
+        // Limit results
         const limit = parseInt(options.limit) || 5;
-        const topResults = results
-            .sort((a, b) => b.relevance_score - a.relevance_score)
-            .slice(0, limit);
+        const topResults = combinedResults.slice(0, limit);
         
         // Format and display results
         console.log('');
+        console.log(`📊 Search Results (Hybrid RRF):`);
+        console.log(`Embedding matches: ${embeddingResults.length}, BM25 matches: ${bm25Results.length}`);
+        console.log('');
+        
         topResults.forEach((result, index) => {
             const date = new Date(result.timestamp).toLocaleString('en-AU', {
                 timeZone: 'Australia/Melbourne',
@@ -1313,7 +1453,8 @@ async function searchCommand(query, options) {
             const topics = JSON.parse(result.topic_tags || '[]');
             const topicStr = topics.length > 0 ? topics.join(', ') : 'general';
             
-            console.log(`[${index + 1}] Score: ${result.relevance_score.toFixed(2)} | ${date}`);
+            console.log(`[${index + 1}] RRF Score: ${result.rrf_score.toFixed(4)} | ${date}`);
+            console.log(`    Embedding: ${result.embedding_score?.toFixed(2) || 'N/A'} | BM25: ${result.bm25_score?.toFixed(2) || 'N/A'}`);
             console.log(`    Topics: ${topicStr}`);
             
             // Show content with line breaks for readability
@@ -1329,7 +1470,7 @@ async function searchCommand(query, options) {
             console.log('');
         });
         
-        console.log(`Showing ${topResults.length} of ${chunks.length} results`);
+        console.log(`Showing ${topResults.length} of ${combinedResults.length} combined results`);
         
         sqlite.close();
         
