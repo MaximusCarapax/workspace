@@ -516,6 +516,11 @@ class EmbeddingGenerator {
     
     async generateEmbedding(text) {
         try {
+            // Truncate text to avoid token limits (text-embedding-3-small has 8191 token limit)
+            // Approximate: ~4 chars per token, so 8191 * 4 ≈ 32764 characters
+            // Let's be safe and truncate to 30000 characters
+            const truncatedText = text.length > 30000 ? text.substring(0, 30000) : text;
+            
             const response = await fetch('https://api.openai.com/v1/embeddings', {
                 method: 'POST',
                 headers: {
@@ -523,13 +528,15 @@ class EmbeddingGenerator {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    input: text,
+                    input: truncatedText,
                     model: 'text-embedding-3-small',
                     dimensions: 1536
                 })
             });
             
             if (!response.ok) {
+                const errorText = await response.text();
+                console.error('OpenAI API error details:', errorText);
                 throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
             }
             
@@ -548,6 +555,14 @@ class EmbeddingGenerator {
             const batch = texts.slice(i, i + batchSize);
             
             try {
+                // Truncate each text in the batch
+                const processedBatch = batch.map(text => {
+                    if (typeof text !== 'string') {
+                        text = String(text);
+                    }
+                    return text.length > 30000 ? text.substring(0, 30000) : text;
+                });
+                
                 const response = await fetch('https://api.openai.com/v1/embeddings', {
                     method: 'POST',
                     headers: {
@@ -555,13 +570,15 @@ class EmbeddingGenerator {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        input: batch,
+                        input: processedBatch,
                         model: 'text-embedding-3-small',
                         dimensions: 1536
                     })
                 });
                 
                 if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`OpenAI API error details:`, errorText);
                     throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
                 }
                 
@@ -1188,6 +1205,11 @@ async function embedCommand(options) {
                     } else {
                         textToEmbed = chunk.content;
                     }
+                    
+                    // Ensure textToEmbed is a string and not too long
+                    if (typeof textToEmbed !== 'string') {
+                        textToEmbed = String(textToEmbed);
+                    }
                     const embedding = await embeddingGenerator.generateEmbedding(textToEmbed);
                     
                     // Convert embedding to Buffer for storage
@@ -1343,41 +1365,66 @@ async function searchCommand(query, options) {
         console.log('Running BM25 keyword search...');
         let bm25Results = [];
         try {
-            // Escape query for FTS5
-            const ftsQuery = query.split(/\s+/)
-                .map(term => `"${term}"*`)
-                .join(' ');
-            
-            const bm25Sql = `
-                SELECT 
-                    sc.id,
-                    sc.session_id,
-                    sc.timestamp,
-                    sc.speakers,
-                    sc.topic_tags,
-                    sc.content,
-                    sc.embedding,
-                    sc.has_decision,
-                    sc.has_action,
-                    fts.rank as bm25_score
-                FROM session_chunks_fts fts
-                JOIN session_chunks sc ON fts.chunk_id = sc.id
-                WHERE fts.content MATCH ?
-                ${filterConditions.length > 0 ? 'AND ' + filterConditions.join(' AND ') : ''}
-                ORDER BY fts.rank
-                LIMIT 100
-            `;
-            
-            const bm25Params = [ftsQuery, ...filterParams];
-            bm25Results = sqlite.prepare(bm25Sql).all(...bm25Params);
-            
-            // Normalize BM25 scores (higher is better in FTS5 rank)
-            if (bm25Results.length > 0) {
-                // FTS5 rank is lower for better matches, so invert
-                const maxRank = Math.max(...bm25Results.map(r => r.bm25_score));
-                bm25Results.forEach(r => {
-                    r.bm25_score = maxRank > 0 ? (maxRank - r.bm25_score + 1) / maxRank : 1;
-                });
+            // Escape query for FTS5 - handle empty query
+            const terms = query.split(/\s+/).filter(term => term.length > 0);
+            if (terms.length === 0) {
+                console.log('Query has no searchable terms for BM25');
+            } else {
+                const ftsQuery = terms
+                    .map(term => `"${term}"*`)
+                    .join(' ');
+                
+                // Build WHERE clause for BM25 search
+                let bm25WhereClause = 'WHERE fts.content MATCH ?';
+                const bm25WhereParams = [ftsQuery];
+                
+                // Add additional filters if present
+                if (filterConditions.length > 0) {
+                    // We need to prefix conditions with 'sc.' since they refer to session_chunks columns
+                    const prefixedConditions = filterConditions.map(cond => {
+                        // Check if condition already has table prefix
+                        if (cond.includes('sc.')) {
+                            return cond;
+                        } else {
+                            // Add 'sc.' prefix
+                            return cond.replace(/(\w+\.)?(\w+)/, (match, table, column) => {
+                                return table ? match : `sc.${column}`;
+                            });
+                        }
+                    });
+                    bm25WhereClause += ' AND ' + prefixedConditions.join(' AND ');
+                    bm25WhereParams.push(...filterParams);
+                }
+                
+                const bm25Sql = `
+                    SELECT 
+                        sc.id,
+                        sc.session_id,
+                        sc.timestamp,
+                        sc.speakers,
+                        sc.topic_tags,
+                        sc.content,
+                        sc.embedding,
+                        sc.has_decision,
+                        sc.has_action,
+                        fts.rank as bm25_score
+                    FROM session_chunks_fts fts
+                    JOIN session_chunks sc ON fts.chunk_id = sc.id
+                    ${bm25WhereClause}
+                    ORDER BY fts.rank
+                    LIMIT 100
+                `;
+                
+                bm25Results = sqlite.prepare(bm25Sql).all(...bm25WhereParams);
+                
+                // Normalize BM25 scores (higher is better in FTS5 rank)
+                if (bm25Results.length > 0) {
+                    // FTS5 rank is lower for better matches, so invert
+                    const maxRank = Math.max(...bm25Results.map(r => r.bm25_score));
+                    bm25Results.forEach(r => {
+                        r.bm25_score = maxRank > 0 ? (maxRank - r.bm25_score + 1) / maxRank : 1;
+                    });
+                }
             }
         } catch (e) {
             console.warn('BM25 search failed:', e.message);
