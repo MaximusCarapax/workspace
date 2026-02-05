@@ -32,7 +32,7 @@ program
   .option('--source-url <url>', 'Source URL if from web')
   .option('--confidence <n>', 'Confidence score 0-1', parseFloat, 1.0)
   .option('--expires <date>', 'Expiration date (ISO format)')
-  .action((title, options) => {
+  .action(async (title, options) => {
     if (!options.summary) {
       console.error('Error: --summary is required');
       process.exit(1);
@@ -41,7 +41,7 @@ program
     const tags = options.tags ? options.tags.split(',').map(t => t.trim()) : [];
     
     try {
-      const id = knowledge.add({
+      const id = await knowledge.add({
         title,
         summary: options.summary,
         sourceType: options.sourceType,
@@ -168,7 +168,7 @@ program
   .option('-t, --tags <tags>', 'New comma-separated tags')
   .option('--confidence <n>', 'New confidence score', parseFloat)
   .option('--expires <date>', 'New expiration date')
-  .action((id, options) => {
+  .action(async (id, options) => {
     try {
       const updates = {};
       
@@ -182,7 +182,7 @@ program
         process.exit(1);
       }
       
-      const entry = knowledge.update(parseInt(id), updates);
+      const entry = await knowledge.update(parseInt(id), updates);
       console.log(`✅ Updated knowledge entry #${entry.id}`);
     } catch (e) {
       console.error('Error updating knowledge:', e.message);
@@ -193,9 +193,9 @@ program
 program
   .command('verify <id>')
   .description('Mark a knowledge entry as verified')
-  .action((id) => {
+  .action(async (id) => {
     try {
-      const entry = knowledge.verify(parseInt(id));
+      const entry = await knowledge.verify(parseInt(id));
       console.log(`✅ Verified knowledge entry #${entry.id}: ${entry.title}`);
     } catch (e) {
       console.error('Error verifying knowledge:', e.message);
