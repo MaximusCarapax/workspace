@@ -216,6 +216,65 @@ async function callOpenRouter(prompt) {
   throw new Error('No response from OpenRouter');
 }
 
+// Topic extraction function
+async function extractTopics(text) {
+    try {
+        // Use the first available Gemini key
+        if (GEMINI_KEYS.length === 0) {
+            throw new Error('No GEMINI_API_KEY found');
+        }
+        
+        const apiKey = GEMINI_KEYS[0];
+        const model = 'gemini-1.5-flash';
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        
+        const prompt = `Extract 1-3 main topic tags from the following conversation chunk. 
+        Return only a comma-separated list of tags, no other text.
+        
+        Conversation:
+        ${text.substring(0, 2000)}`;
+        
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.1,
+                    maxOutputTokens: 50,
+                }
+            })
+        });
+
+        const data = await res.json();
+        
+        if (data.error) {
+            throw new Error(data.error.message);
+        }
+
+        const topicsText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (!topicsText) {
+            throw new Error('No response generated');
+        }
+        
+        // Parse comma-separated tags
+        const topics = topicsText.split(',').map(tag => 
+            tag.trim().toLowerCase().replace(/[^a-z0-9\-]/g, '-')
+        ).filter(tag => tag.length > 0);
+        
+        return topics.slice(0, 3);
+    } catch (error) {
+        console.warn('Gemini topic extraction failed, using fallback:', error.message);
+        // Fallback to keyword extraction
+        const words = text.toLowerCase().split(/\s+/);
+        const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were']);
+        const keywords = words
+            .filter(word => word.length > 3 && !commonWords.has(word))
+            .slice(0, 3);
+        return keywords;
+    }
+}
+
 // Auto-log tool usage (silent fail)
 function logToolUsage(provider, promptLength, success) {
   try {
@@ -259,4 +318,18 @@ async function main() {
   }
 }
 
-main();
+// Export for use by other modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        extractTopics,
+        callGemini,
+        callOpenRouter,
+        logUsage,
+        logToolUsage
+    };
+}
+
+// Only run main if this is the main module
+if (require.main === module) {
+    main();
+}
