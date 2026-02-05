@@ -60,8 +60,13 @@ async function main() {
     console.log(`   Embedding stored for memory ${result.memoryId}`);
     console.log(`   Model: ${result.model}, Dimensions: ${result.dimensions}`);
     
-    // Example 3: Search for similar memories using embedding
-    console.log('\n3. Searching for similar memories using embedding ---');
+    // Example 3: Test getEmbeddingDimensions
+    console.log('\n3. Testing getEmbeddingDimensions ---');
+    const dims = db.getEmbeddingDimensions('text-embedding-3-small');
+    console.log(`   text-embedding-3-small dimensions: ${dims}`);
+    
+    // Example 4: Search for similar memories using embedding
+    console.log('\n4. Searching for similar memories using embedding ---');
     const searchResults = db.searchMemoryByEmbedding({
       model: 'text-embedding-3-small',
       embedding: embedding,
@@ -71,8 +76,8 @@ async function main() {
     
     console.log(`   Found ${searchResults.length} similar memories using embedding search`);
     
-    // Example 4: Semantic search using text query
-    console.log('\n4. Semantic search using text query ---');
+    // Example 5: Semantic search using text query
+    console.log('\n5. Semantic search using text query ---');
     console.log('   This function takes a query string, generates an embedding for it,');
     console.log('   and finds the most similar memories using cosine similarity.');
     
@@ -95,8 +100,26 @@ async function main() {
       });
     }
     
-    // Example 5: Another semantic search example
-    console.log('\n5. Another semantic search example ---');
+    // Example 6: Test batch embeddings
+    console.log('\n6. Testing batch embeddings ---');
+    const texts = [
+      "The quick brown fox jumps over the lazy dog",
+      "A fast animal leaps over a sleeping canine",
+      "Programming is fun and challenging"
+    ];
+    console.log(`   Generating embeddings for ${texts.length} texts...`);
+    
+    const batchEmbeddings = await db.generateEmbeddingsBatch(texts, {
+      model: 'text-embedding-3-small',
+      sessionId: 'example-session',
+      source: 'example'
+    });
+    
+    console.log(`   Generated ${batchEmbeddings.length} embeddings`);
+    console.log(`   Each embedding has ${batchEmbeddings[0]?.length || 0} dimensions`);
+    
+    // Example 7: Another semantic search example
+    console.log('\n7. Another semantic search example ---');
     const semanticQuery2 = "wildlife in the forest";
     console.log(`   Query: "${semanticQuery2}"`);
     
@@ -117,6 +140,14 @@ async function main() {
     }
     
     console.log('\n✅ All examples completed successfully!');
+    console.log('\nSummary of exported embedding functions:');
+    console.log('   - generateEmbedding: Generate single embedding');
+    console.log('   - generateEmbeddingsBatch: Generate multiple embeddings');
+    console.log('   - getEmbeddingDimensions: Get dimensions for a model');
+    console.log('   - addEmbeddingToMemory: Add embedding to memory');
+    console.log('   - semanticSearchMemory: Search with text query');
+    console.log('   - searchMemoryByEmbedding: Search with embedding vector');
+    console.log('   - generateAndStoreEmbedding: Generate and store embedding');
     
   } catch (error) {
     console.error('\n❌ Error:', error.message);

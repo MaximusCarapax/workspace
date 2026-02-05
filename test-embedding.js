@@ -36,19 +36,57 @@ try {
   const dims = embeddings.getEmbeddingDimensions();
   console.log(`\n4. Default embedding dimensions: ${dims}`);
   
+  // Test that all functions are available from db module too
+  console.log('\n5. Checking db module exports...');
+  const db = require('./lib/db');
+  const dbEmbeddingFunctions = [
+    'generateEmbedding',
+    'generateEmbeddingsBatch',
+    'getEmbeddingDimensions',
+    'addEmbeddingToMemory',
+    'generateAndStoreEmbedding',
+    'addMemoryEmbedding',
+    'getMemoryEmbedding',
+    'getMemoryEmbeddingDirect',
+    'searchMemoryByEmbedding',
+    'semanticSearchMemory',
+    'getMemoriesWithEmbeddings',
+    'updateMemoryWithEmbedding',
+    'cosineSimilarity'
+  ];
+  
+  const missingFunctions = [];
+  for (const funcName of dbEmbeddingFunctions) {
+    if (typeof db[funcName] !== 'function') {
+      missingFunctions.push(funcName);
+    }
+  }
+  
+  if (missingFunctions.length === 0) {
+    console.log('   ✅ All embedding functions are exported from db module');
+  } else {
+    console.log(`   ❌ Missing functions: ${missingFunctions.join(', ')}`);
+  }
+  
   console.log('\n✅ All checks passed!');
   console.log('\nEmbedding generation will use:');
   console.log('   - OpenAI if OPENAI_API_KEY is available');
   console.log('   - OpenRouter with Gemini embeddings as fallback');
   console.log('\nTo test embedding generation (returns Float32Array):');
-  console.log('   node -e "const { generateEmbedding } = require(\'./lib/embeddings\');');
-  console.log('   generateEmbedding(\'test text\').then(e => {');
+  console.log('   node -e "const db = require(\'./lib/db\');');
+  console.log('   db.generateEmbedding(\'test text\').then(e => {');
   console.log('     console.log(\'Type:\', e.constructor.name);');
   console.log('     console.log(\'Dimensions:\', e.length);');
   console.log('   }).catch(console.error);"');
   
   console.log('\nTo test semantic search:');
   console.log('   node test-semantic-search.js');
+  
+  console.log('\nTo test batch embeddings:');
+  console.log('   node -e "const db = require(\'./lib/db\');');
+  console.log('   db.generateEmbeddingsBatch([\'text1\', \'text2\']).then(embeddings => {');
+  console.log('     console.log(\'Generated\', embeddings.length, \'embeddings\');');
+  console.log('   }).catch(console.error);"');
   
 } catch (error) {
   console.error('\n❌ Failed to load embeddings module:', error.message);
