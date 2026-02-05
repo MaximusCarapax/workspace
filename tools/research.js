@@ -562,7 +562,4 @@ ${sourcesText}`;
   console.log(result);
 }
 
-main().catch(e => {
-  console.error('Error:', e.message);
-  process.exit(1);
-});
+main();
