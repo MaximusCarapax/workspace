@@ -48,12 +48,25 @@ node tools/db.js activity add build "Completed PDF extractor" \
   --meta '{"files":"tools/extractor.js"}'
 ```
 
-### Stage Flow
+### Stage Flow & Roles
 ```
-idea → spec → building → review → done
-                ↓
-             blocked (with reason)
+idea → spec → spec-review → building → qa → final-review → done → live
+        │         │            │        │        │
+      Opus    Spec-Reviewer  Builder   QA     Opus
 ```
+
+| Stage | Who | Action |
+|-------|-----|--------|
+| idea | Opus | Create item, describe problem |
+| spec | Opus | Write spec doc with acceptance criteria |
+| spec-review | **Spec-Reviewer** | Check spec is buildable, criteria testable |
+| building | **Builder** | Implement per spec |
+| qa | **QA** | Test against acceptance criteria |
+| final-review | Opus | Final sign-off, security/quality check |
+| done | — | Complete, ready to ship |
+| live | — | In production |
+
+**Blocked** can happen at any stage — add reason in note.
 
 ---
 

@@ -1011,10 +1011,10 @@ function pipelineShow(id, options = {}) {
     ORDER BY created_at ASC
   `).all(id);
   
-  // Get parent info if exists
+  // Get parent info if exists (including spec for stories)
   let parentInfo = null;
   if (item.parent_id) {
-    parentInfo = db.db.prepare(`SELECT id, title, stage FROM pipeline WHERE id = ?`).get(item.parent_id);
+    parentInfo = db.db.prepare(`SELECT id, title, stage, spec_doc FROM pipeline WHERE id = ?`).get(item.parent_id);
   }
   
   // Get children/stories if this is a feature
@@ -1031,7 +1031,10 @@ function pipelineShow(id, options = {}) {
   console.log(`  Stage: ${item.stage}`);
   console.log(`  Priority: ${item.priority}`);
   if (item.assigned_to) console.log(`  Assigned to: ${item.assigned_to}`);
-  if (parentInfo) console.log(`  Parent: #${parentInfo.id} - ${parentInfo.title} (${parentInfo.stage})`);
+  if (parentInfo) {
+    console.log(`  Parent: #${parentInfo.id} - ${parentInfo.title} (${parentInfo.stage})`);
+    if (parentInfo.spec_doc) console.log(`  Parent Spec: ${parentInfo.spec_doc}`);
+  }
   if (item.description) console.log(`  Description: ${item.description}`);
   if (item.spec_doc) console.log(`  Spec: ${item.spec_doc}`);
   if (item.acceptance_criteria) console.log(`  Acceptance: ${item.acceptance_criteria}`);
@@ -1646,7 +1649,7 @@ try {
           {
             const title = args[2];
             if (!title) {
-              console.log('Usage: pipeline create "Title" [--type feature|story] [--parent <id>] [--priority 1-4]');
+              console.log('Usage: pipeline create "Title" [--type feature|story] [--parent <id>] [--priority 1-4] [--ac \'["criteria1","criteria2"]\']');
               break;
             }
             const itemType = flags.type || 'feature';
@@ -1654,17 +1657,37 @@ try {
               console.log('Invalid type. Must be "feature" or "story".');
               break;
             }
+            
+            // Parse acceptance criteria if provided
+            let acceptanceCriteria = null;
+            if (flags.ac) {
+              try {
+                acceptanceCriteria = JSON.parse(flags.ac);
+                if (!Array.isArray(acceptanceCriteria)) {
+                  console.log('--ac must be a JSON array: \'["criteria1", "criteria2"]\'');
+                  break;
+                }
+              } catch (e) {
+                console.log('Invalid JSON for --ac. Use: \'["criteria1", "criteria2"]\'');
+                break;
+              }
+            }
+            
             const newId = db.createPipeline({
               title,
               type: itemType,
               parentId: flags.parent ? parseInt(flags.parent) : null,
-              priority: flags.priority ? parseInt(flags.priority) : 2
+              priority: flags.priority ? parseInt(flags.priority) : 2,
+              acceptanceCriteria
             });
             const defaultStage = db.getDefaultStage(itemType);
             console.log(`✅ Created ${itemType} #${newId}: ${title}`);
             console.log(`   Stage: ${defaultStage}`);
             if (flags.parent) {
               console.log(`   Linked to parent #${flags.parent}`);
+            }
+            if (acceptanceCriteria) {
+              console.log(`   Acceptance criteria: ${acceptanceCriteria.length} items`);
             }
           }
           break;
@@ -1682,6 +1705,30 @@ try {
           break;
         case 'assign':
           pipelineAssign(parseInt(args[2]), args[3]);
+          break;
+        case 'update':
+          {
+            const id = parseInt(args[2]);
+            if (!id) {
+              console.log('Usage: pipeline update <id> [--spec <path>] [--desc "description"] [--priority 1-4]');
+              break;
+            }
+            const updates = {};
+            if (flags.spec) updates.spec_doc = flags.spec;
+            if (flags.desc) updates.description = flags.desc;
+            if (flags.priority) updates.priority = parseInt(flags.priority);
+            
+            if (Object.keys(updates).length === 0) {
+              console.log('No updates provided. Use --spec, --desc, or --priority');
+              break;
+            }
+            
+            db.updatePipeline(id, updates);
+            console.log(`✅ Updated pipeline #${id}`);
+            if (flags.spec) console.log(`   Spec: ${flags.spec}`);
+            if (flags.desc) console.log(`   Description updated`);
+            if (flags.priority) console.log(`   Priority: ${flags.priority}`);
+          }
           break;
         default:
           pipelineBoard();
