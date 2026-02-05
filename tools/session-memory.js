@@ -43,6 +43,11 @@ try {
 } catch (e) {
     console.warn('sqlite-vec not available:', e.message);
 }
+try {
+    sqliteVec = require('sqlite-vec');
+} catch (e) {
+    console.warn('sqlite-vec not available:', e.message);
+}
 
 // Constants from spec
 const MAX_CHUNK_SIZE = 500; // tokens (~2000 chars)
@@ -1303,14 +1308,6 @@ program
     .option('--all', 'Embed all chunks')
     .option('--session <id>', 'Embed chunks for specific session')
     .option('--status', 'Show embedding status')
-    .action(embedCommand);
-
-program
-    .command('embed')
-    .description('Generate embeddings for chunks')
-    .option('--all', 'Embed all unembedded chunks')
-    .option('--session <id>', 'Embed specific session')
-    .option('--force', 'Re-embed even if already embedded')
     .action(embedCommand);
 
 if (require.main === module) {
