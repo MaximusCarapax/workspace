@@ -216,6 +216,21 @@ async function callOpenRouter(prompt) {
   throw new Error('No response from OpenRouter');
 }
 
+// Auto-log tool usage (silent fail)
+function logToolUsage(provider, promptLength, success) {
+  try {
+    const { logTool } = require('../lib/auto-log');
+    logTool('gemini', `Gemini query (${provider}): ${promptLength} chars`, {
+      provider,
+      prompt_length: promptLength,
+      model,
+      success
+    });
+  } catch (e) {
+    // Silent fail
+  }
+}
+
 // Main
 async function main() {
   // Default: Use OpenRouter (no rate limits)
@@ -224,6 +239,7 @@ async function main() {
   if (OPENROUTER_KEY && allowFallback) {
     try {
       const result = await callOpenRouter(prompt);
+      logToolUsage('openrouter', prompt.length, true);
       console.log(result);
       return;
     } catch (err) {
@@ -234,8 +250,10 @@ async function main() {
   // Fallback to direct Gemini
   try {
     const result = await callGemini(prompt);
+    logToolUsage('gemini-direct', prompt.length, true);
     console.log(result);
   } catch (err) {
+    logToolUsage('gemini-direct', prompt.length, false);
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }

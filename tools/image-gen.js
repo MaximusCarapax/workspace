@@ -164,6 +164,19 @@ Examples:
         // Silently fail if db not available
       }
     }
+    
+    // Auto-log tool usage
+    try {
+      const { logTool } = require('../lib/auto-log');
+      logTool('image_gen', `Generated image: "${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"`, {
+        prompt: prompt.substring(0, 200),
+        model,
+        tokens_in: result.usage?.prompt_tokens,
+        tokens_out: result.usage?.completion_tokens
+      });
+    } catch (e) {
+      // Silent fail
+    }
   } catch (err) {
     console.error('Error:', err.message);
     process.exit(1);

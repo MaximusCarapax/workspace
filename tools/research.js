@@ -570,6 +570,21 @@ ${sourcesText}`;
   }
   
   console.error(`[Research] Done (${provider})\n`);
+  
+  // Auto-log tool usage
+  try {
+    const { logTool } = require('../lib/auto-log');
+    logTool('research', `Researched: "${question.substring(0, 50)}${question.length > 50 ? '...' : ''}"`, {
+      query: question,
+      sources_count: sources.length,
+      total_chars: totalChars,
+      provider,
+      urls: sources.map(s => s.url)
+    });
+  } catch (e) {
+    // Silent fail - don't break the tool
+  }
+  
   console.log(result);
 }
 

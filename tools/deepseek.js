@@ -92,6 +92,16 @@ function logUsage(usage) {
       taskType: 'tool',
       taskDetail: 'deepseek.js CLI'
     });
+    
+    // Auto-log tool usage
+    const { logTool } = require('../lib/auto-log');
+    logTool('deepseek', `DeepSeek query: ${prompt.length} chars`, {
+      model,
+      prompt_length: prompt.length,
+      tokens_in: usage.prompt_tokens,
+      tokens_out: usage.completion_tokens,
+      cost_usd: cost
+    });
   } catch (e) {
     // Silently fail if db not available
   }
