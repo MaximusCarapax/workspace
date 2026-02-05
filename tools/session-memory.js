@@ -17,6 +17,14 @@ const path = require('path');
 const { program } = require('commander');
 const db = require('../lib/db');
 
+// For topic extraction
+let gemini;
+try {
+    gemini = require('./gemini');
+} catch (e) {
+    console.warn('Gemini module not available, topic extraction will be limited:', e.message);
+}
+
 // Constants from spec
 const MAX_CHUNK_SIZE = 500; // tokens (~2000 chars)
 const BATCH_SIZE = 100;
@@ -528,18 +536,73 @@ async function statusCommand() {
         const avgTokens = sqlite.prepare('SELECT AVG(token_count) as avg FROM session_chunks').get()?.avg || 0;
         const recentChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE created_at > datetime(\'now\', \'-24 hours\')').get()?.count || 0;
         
+        // Get index state info
+        const indexedSessions = sqlite.prepare('SELECT COUNT(*) as count FROM session_index_state').get()?.count || 0;
+        const failedSessions = sqlite.prepare('SELECT COUNT(*) as count FROM session_index_state WHERE status = "failed"').get()?.count || 0;
+        
         sqlite.close();
         
         console.log('\n📊 Session Memory Status');
         console.log('======================');
         console.log(`Total chunks: ${totalChunks}`);
         console.log(`Total sessions: ${totalSessions}`);
+        console.log(`Indexed sessions: ${indexedSessions}`);
+        console.log(`Failed sessions: ${failedSessions}`);
         console.log(`Average tokens per chunk: ${avgTokens.toFixed(1)}`);
         console.log(`Chunks created in last 24h: ${recentChunks}`);
         
     } catch (error) {
         console.error('Error getting status:', error.message);
         process.exit(1);
+    }
+}
+
+async function healthCommand() {
+    try {
+        const Database = require('better-sqlite3');
+        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+        
+        if (!fs.existsSync(dbPath)) {
+            console.log('Health: ERROR - No database found');
+            return;
+        }
+        
+        const sqlite = new Database(dbPath);
+        
+        // Check if tables exist
+        const chunksTable = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='session_chunks'").get();
+        const stateTable = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='session_index_state'").get();
+        
+        if (!chunksTable || !stateTable) {
+            console.log('Health: DEGRADED - Required tables missing');
+            sqlite.close();
+            return;
+        }
+        
+        const totalChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks').get()?.count || 0;
+        const totalSessions = sqlite.prepare('SELECT COUNT(DISTINCT session_id) as count FROM session_chunks').get()?.count || 0;
+        const failedSessions = sqlite.prepare('SELECT COUNT(*) as count FROM session_index_state WHERE status = "failed"').get()?.count || 0;
+        const lastIndexed = sqlite.prepare('SELECT MAX(last_indexed) as latest FROM session_index_state').get()?.latest;
+        
+        sqlite.close();
+        
+        console.log('Session Memory Health Check:');
+        console.log(`  Total chunks: ${totalChunks}`);
+        console.log(`  Total sessions: ${totalSessions}`);
+        console.log(`  Failed sessions: ${failedSessions}`);
+        console.log(`  Last indexed: ${lastIndexed || 'Never'}`);
+        
+        if (failedSessions > 0) {
+            console.log('Status: DEGRADED');
+        } else if (totalSessions === 0) {
+            console.log('Status: OK (No sessions indexed yet)');
+        } else {
+            console.log('Status: OK');
+        }
+        
+    } catch (error) {
+        console.error('Health check error:', error.message);
+        console.log('Status: ERROR');
     }
 }
 
