@@ -41,3 +41,4 @@ build/
 data/linkedin-cookies.json
 .git-push-notification
 .aider*
+HEARTBEAT.md
