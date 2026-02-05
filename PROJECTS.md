@@ -29,7 +29,7 @@ Ideas for night shifts and proactive work. Jason reviews, tests, commits.
 - [ ] **Git workflow** — Set up repo, branch strategy, PR templates
 - [x] **Dashboard v2** — Journals viewer + content + insights + stats ✅ (2026-02-03)
 - [ ] **Webhook receiver** — For social notifications
-- [x] **Linear CLI** — Task management from command line ✅ (2026-02-03)
+- [x] **SQLite Backlog** — Task management via db.js (replaced Linear) ✅ (2026-02-04)
 - [x] **CRM-lite** — Contact management via db.js ✅ (2026-02-04)
 - [x] **Backlog prioritization** — Smart task scoring ✅ (2026-02-04)
 
@@ -40,7 +40,7 @@ Ideas for night shifts and proactive work. Jason reviews, tests, commits.
 - [x] Night shift cron job
 - [x] Heartbeat extended to 1hr
 - [x] Dashboard v2 with journals viewer (2026-02-03)
-- [x] Linear CLI tool (2026-02-03)
+- [x] SQLite backlog system (replaced Linear, 2026-02-04)
 - [x] Reddit pulse tool (2026-02-03)
 - [x] Content calendar system (tools/content.js)
 - [x] Insights pipeline (tools/insights.js)

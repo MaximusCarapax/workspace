@@ -19,7 +19,7 @@ Ongoing roles and responsibilities — things I do consistently, not just when a
 - Follow back / connect with interesting people
 
 ## 🔧 Overnight Builds (11pm Melbourne)
-- Pick from Linear backlog, ship something
+- Pick from backlog (`db.js backlog prioritize`), ship something
 - Budget: $5 or 20 minutes, whichever first
 - Jason wakes up to progress
 

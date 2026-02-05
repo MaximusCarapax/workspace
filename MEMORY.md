@@ -54,7 +54,7 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - **Web Search:** Brave API via `web_search` tool
 - **Browser:** Headless Chromium, can't bypass CAPTCHAs
 - **Phone:** +18209004002 (Twilio, SMS/MMS/Voice enabled!)
-- **Linear:** `node tools/linear.js` - Task management (team: MAX)
+- **Backlog:** `node tools/db.js backlog` - Task management (SQLite)
 - **Gmail:** `node tools/gmail.js` - Jason's email (read-only)
 - **Code Router:** `node tools/code.js` - Routes to DeepSeek/Gemini
 - **Aider:** `/home/node/.local/bin/aider --model deepseek/deepseek-chat` - Git-aware coding (persistent on Zeabur)
@@ -158,7 +158,7 @@ Full research: docs/AFFILIATE_PROGRAMS.md
 - **Schedule:** 11pm Melbourne daily
 - **Budget:** $10 / 30 minutes (doubled 2026-02-04)
 - **Purpose:** Build something useful while Jason sleeps
-- **Pattern:** Pick from Linear backlog → delegate to DeepSeek → ship as draft
+- **Pattern:** Pick from backlog (`db.js backlog prioritize`) → delegate to DeepSeek → ship as draft
 
 ## Tech Stack Preferences (2026-02-04)
 For new builds, prefer modern over simple:
