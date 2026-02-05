@@ -89,8 +89,10 @@ async function main() {
     
     console.log(`   Found ${semanticResults.length} semantically similar memories`);
     if (semanticResults.length > 0) {
-      console.log(`   Best match similarity: ${(semanticResults[0].similarity * 100).toFixed(1)}%`);
-      console.log(`   Memory content: ${semanticResults[0].content.substring(0, 80)}...`);
+      semanticResults.forEach((result, i) => {
+        console.log(`   ${i + 1}. Similarity: ${(result.similarity * 100).toFixed(1)}%`);
+        console.log(`      Content: ${result.content.substring(0, 60)}...`);
+      });
     }
     
     // Example 5: Another semantic search example
@@ -107,9 +109,12 @@ async function main() {
     });
     
     console.log(`   Found ${semanticResults2.length} results`);
-    semanticResults2.forEach((result, i) => {
-      console.log(`   ${i + 1}. Similarity: ${(result.similarity * 100).toFixed(1)}%`);
-    });
+    if (semanticResults2.length > 0) {
+      semanticResults2.forEach((result, i) => {
+        console.log(`   ${i + 1}. Similarity: ${(result.similarity * 100).toFixed(1)}%`);
+        console.log(`      Content: ${result.content.substring(0, 60)}...`);
+      });
+    }
     
     console.log('\n✅ All examples completed successfully!');
     

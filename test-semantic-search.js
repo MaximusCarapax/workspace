@@ -49,12 +49,14 @@ async function testSemanticSearch() {
     console.log(`   Found ${results.length} results`);
     
     if (results.length > 0) {
-      console.log('\n   Top results:');
+      console.log('\n   Top results (with similarity scores):');
       results.forEach((result, i) => {
         console.log(`   ${i + 1}. Similarity: ${(result.similarity * 100).toFixed(1)}%`);
         console.log(`      Content: ${result.content.substring(0, 60)}...`);
         console.log(`      Category: ${result.category}, Importance: ${result.importance}`);
       });
+      console.log('\n   Note: All results include similarity scores between 0 and 1');
+      console.log('         where 1 means identical and 0 means completely different');
     } else {
       console.log('   No results found. Try lowering the threshold.');
     }
