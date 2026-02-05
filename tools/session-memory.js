@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const { program } = require('commander');
 const db = require('../lib/db');
+const creds = require('../lib/credentials');
 
 // For topic extraction
 let gemini;
@@ -23,6 +24,14 @@ try {
     gemini = require('./gemini');
 } catch (e) {
     console.warn('Gemini module not available, topic extraction will be limited:', e.message);
+}
+
+// For embeddings
+let sqliteVec;
+try {
+    sqliteVec = require('sqlite-vec');
+} catch (e) {
+    console.warn('sqlite-vec not available:', e.message);
 }
 
 // Constants from spec
@@ -348,6 +357,105 @@ ${chunkContent}`;
     }
 }
 
+class EmbeddingGenerator {
+    constructor() {
+        this.openaiApiKey = creds.get('openai');
+        if (!this.openaiApiKey) {
+            throw new Error('OpenAI API key not found in credentials');
+        }
+    }
+    
+    async generateEmbedding(text) {
+        try {
+            const response = await fetch('https://api.openai.com/v1/embeddings', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.openaiApiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    input: text,
+                    model: 'text-embedding-3-small',
+                    dimensions: 1536
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            return data.data[0].embedding;
+        } catch (error) {
+            console.error('Error generating embedding:', error.message);
+            throw error;
+        }
+    }
+    
+    async generateBatchEmbeddings(texts, batchSize = 100) {
+        const embeddings = [];
+        
+        for (let i = 0; i < texts.length; i += batchSize) {
+            const batch = texts.slice(i, i + batchSize);
+            
+            try {
+                const response = await fetch('https://api.openai.com/v1/embeddings', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.openaiApiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        input: batch,
+                        model: 'text-embedding-3-small',
+                        dimensions: 1536
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                embeddings.push(...data.data.map(item => item.embedding));
+                
+                console.log(`Generated embeddings for batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(texts.length / batchSize)}`);
+                
+                // Rate limiting - wait between batches
+                if (i + batchSize < texts.length) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            } catch (error) {
+                console.error(`Error in batch ${Math.floor(i / batchSize) + 1}:`, error.message);
+                // Fill with nulls for failed embeddings
+                for (let j = 0; j < batch.length; j++) {
+                    embeddings.push(null);
+                }
+            }
+        }
+        
+        return embeddings;
+    }
+    
+    embeddingToBuffer(embedding) {
+        if (!embedding) return null;
+        const buffer = Buffer.alloc(embedding.length * 4);
+        for (let i = 0; i < embedding.length; i++) {
+            buffer.writeFloatLE(embedding[i], i * 4);
+        }
+        return buffer;
+    }
+    
+    bufferToEmbedding(buffer) {
+        if (!buffer) return null;
+        const embedding = [];
+        for (let i = 0; i < buffer.length; i += 4) {
+            embedding.push(buffer.readFloatLE(i));
+        }
+        return embedding;
+    }
+}
+
 async function createTables() {
     const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
     
@@ -359,6 +467,16 @@ async function createTables() {
     // Create tables (using existing db module pattern)
     const Database = require('better-sqlite3');
     const sqlite = new Database(dbPath);
+    
+    // Load sqlite-vec extension if available
+    if (sqliteVec) {
+        try {
+            sqliteVec.load(sqlite);
+            console.log('✓ sqlite-vec extension loaded');
+        } catch (e) {
+            console.warn('Failed to load sqlite-vec extension:', e.message);
+        }
+    }
     
     // Create session_chunks table with all required columns from spec
     sqlite.exec(`
@@ -379,6 +497,21 @@ async function createTables() {
             UNIQUE(session_id, chunk_index)
         )
     `);
+    
+    // Create sqlite-vec virtual table for vector search if extension is loaded
+    if (sqliteVec) {
+        try {
+            sqlite.exec(`
+                CREATE VIRTUAL TABLE IF NOT EXISTS session_embeddings USING vec0(
+                    chunk_id INTEGER PRIMARY KEY,
+                    embedding FLOAT[1536]
+                )
+            `);
+            console.log('✓ Vector search table created');
+        } catch (e) {
+            console.warn('Failed to create vector search table:', e.message);
+        }
+    }
     
     // Create session_index_state table for tracking
     sqlite.exec(`
@@ -497,6 +630,176 @@ async function processSessionFile(chunker, sessionId, filepath) {
     console.log(`Processed ${chunks.length} chunks for session ${sessionId}`);
 }
 
+async function embedCommand(options) {
+    try {
+        const embedGenerator = new EmbeddingGenerator();
+        
+        const Database = require('better-sqlite3');
+        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+        
+        if (!fs.existsSync(dbPath)) {
+            console.error('Database not found. Run chunk command first.');
+            process.exit(1);
+        }
+        
+        const sqlite = new Database(dbPath);
+        
+        // Load sqlite-vec extension
+        if (sqliteVec) {
+            try {
+                sqliteVec.load(sqlite);
+                
+                // Ensure vector table exists
+                sqlite.exec(`
+                    CREATE VIRTUAL TABLE IF NOT EXISTS session_embeddings USING vec0(
+                        chunk_id INTEGER PRIMARY KEY,
+                        embedding FLOAT[1536]
+                    )
+                `);
+            } catch (e) {
+                console.error('Failed to load sqlite-vec extension:', e.message);
+                process.exit(1);
+            }
+        } else {
+            console.error('sqlite-vec extension not available. Please install: npm install sqlite-vec');
+            process.exit(1);
+        }
+        
+        let whereClause = '';
+        let params = [];
+        
+        if (options.session) {
+            whereClause = 'WHERE session_id = ?';
+            params = [options.session];
+            console.log(`Embedding chunks for session: ${options.session}`);
+        } else if (options.all) {
+            console.log('Embedding all chunks...');
+        } else {
+            // Default: only embed chunks without embeddings (incremental)
+            whereClause = 'WHERE embedding IS NULL';
+            console.log('Embedding chunks without embeddings (incremental)...');
+        }
+        
+        // Get chunks to embed
+        const chunks = sqlite.prepare(`
+            SELECT id, context_content 
+            FROM session_chunks 
+            ${whereClause}
+            ORDER BY id
+        `).all(...params);
+        
+        if (chunks.length === 0) {
+            console.log('No chunks to embed.');
+            sqlite.close();
+            return;
+        }
+        
+        console.log(`Found ${chunks.length} chunks to embed`);
+        
+        // Generate embeddings in batches
+        const BATCH_SIZE = 50; // Smaller batches for better progress tracking
+        let processedCount = 0;
+        
+        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+            const batch = chunks.slice(i, i + BATCH_SIZE);
+            const texts = batch.map(chunk => chunk.context_content);
+            
+            console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)}...`);
+            
+            try {
+                const embeddings = await embedGenerator.generateBatchEmbeddings(texts, BATCH_SIZE);
+                
+                // Store embeddings
+                const updateStmt = sqlite.prepare('UPDATE session_chunks SET embedding = ? WHERE id = ?');
+                const insertVectorStmt = sqlite.prepare(`
+                    INSERT OR REPLACE INTO session_embeddings (chunk_id, embedding) 
+                    VALUES (?, ?)
+                `);
+                
+                const transaction = sqlite.transaction(() => {
+                    for (let j = 0; j < batch.length; j++) {
+                        const embedding = embeddings[j];
+                        if (embedding) {
+                            const embeddingBuffer = embedGenerator.embeddingToBuffer(embedding);
+                            
+                            // Store in main table
+                            updateStmt.run(embeddingBuffer, batch[j].id);
+                            
+                            // Store in vector table
+                            insertVectorStmt.run(batch[j].id, JSON.stringify(embedding));
+                            
+                            processedCount++;
+                        } else {
+                            console.warn(`Failed to generate embedding for chunk ${batch[j].id}`);
+                        }
+                    }
+                });
+                
+                transaction();
+                console.log(`✓ Processed ${processedCount} embeddings so far`);
+                
+            } catch (error) {
+                console.error(`Error processing batch:`, error.message);
+                // Continue with next batch
+            }
+        }
+        
+        sqlite.close();
+        console.log(`🎉 Embedding completed! Processed ${processedCount} chunks.`);
+        
+    } catch (error) {
+        console.error('Error during embedding:', error.message);
+        process.exit(1);
+    }
+}
+
+async function embedStatusCommand() {
+    try {
+        const Database = require('better-sqlite3');
+        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+        
+        if (!fs.existsSync(dbPath)) {
+            console.log('No database found.');
+            return;
+        }
+        
+        const sqlite = new Database(dbPath);
+        
+        const totalChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks').get()?.count || 0;
+        const embeddedChunks = sqlite.prepare('SELECT COUNT(*) as count FROM session_chunks WHERE embedding IS NOT NULL').get()?.count || 0;
+        const pendingChunks = totalChunks - embeddedChunks;
+        
+        // Check if vector table exists and has data
+        let vectorTableStats = null;
+        try {
+            vectorTableStats = sqlite.prepare('SELECT COUNT(*) as count FROM session_embeddings').get();
+        } catch (e) {
+            // Vector table doesn't exist or sqlite-vec not loaded
+        }
+        
+        sqlite.close();
+        
+        console.log('\n📊 Embedding Status');
+        console.log('==================');
+        console.log(`Total chunks: ${totalChunks}`);
+        console.log(`Embedded chunks: ${embeddedChunks}`);
+        console.log(`Pending chunks: ${pendingChunks}`);
+        
+        if (vectorTableStats) {
+            console.log(`Vector search entries: ${vectorTableStats.count}`);
+        } else {
+            console.log('Vector search: Not available (sqlite-vec not loaded)');
+        }
+        
+        const embeddedPercentage = totalChunks > 0 ? ((embeddedChunks / totalChunks) * 100).toFixed(1) : 0;
+        console.log(`Completion: ${embeddedPercentage}%`);
+        
+    } catch (error) {
+        console.error('Error getting embedding status:', error.message);
+        process.exit(1);
+    }
+}
+
 async function validateCommand(file) {
     const validation = SessionValidator.validateSessionFile(file);
     
@@ -555,6 +858,140 @@ async function statusCommand() {
         console.error('Error getting status:', error.message);
         process.exit(1);
     }
+}
+
+// Build contextual content for embedding
+function buildContextualContent(chunk) {
+    const date = new Date(chunk.timestamp);
+    const dateStr = date.toLocaleDateString('en-AU', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Australia/Melbourne'
+    });
+    
+    const speakers = JSON.parse(chunk.speakers || '[]');
+    const topics = JSON.parse(chunk.topic_tags || '[]');
+    
+    let context = `[Session from ${dateStr}]\n`;
+    context += `[Participants: ${speakers.join(', ') || 'Unknown'}]\n`;
+    if (topics.length > 0) {
+        context += `[Topics: ${topics.join(', ')}]\n`;
+    }
+    context += '\n' + chunk.content;
+    
+    return context;
+}
+
+// Generate embeddings via OpenAI
+async function generateEmbedding(text) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new SessionMemoryError('CONFIG_ERROR', 'OPENAI_API_KEY not set');
+    }
+    
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model: 'text-embedding-3-small',
+            input: text
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.text();
+        throw new SessionMemoryError('EMBEDDING_ERROR', `OpenAI API error: ${error}`);
+    }
+    
+    const data = await response.json();
+    return data.data[0].embedding;
+}
+
+async function embedCommand(options) {
+    console.log('Generating embeddings...\n');
+    
+    const Database = require('better-sqlite3');
+    const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+    const sqlite = new Database(dbPath);
+    
+    // Create embeddings table if not exists
+    sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS session_embeddings (
+            chunk_id INTEGER PRIMARY KEY,
+            embedding BLOB NOT NULL,
+            context_content TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (chunk_id) REFERENCES session_chunks(id)
+        )
+    `);
+    
+    // Get chunks to embed
+    let query = 'SELECT c.* FROM session_chunks c';
+    if (!options.force) {
+        query += ' LEFT JOIN session_embeddings e ON c.id = e.chunk_id WHERE e.chunk_id IS NULL';
+    }
+    if (options.session) {
+        query += (options.force ? ' WHERE' : ' AND') + ` c.session_id = '${options.session}'`;
+    }
+    
+    const chunks = sqlite.prepare(query).all();
+    
+    if (chunks.length === 0) {
+        console.log('No chunks need embedding.');
+        sqlite.close();
+        return;
+    }
+    
+    console.log(`Embedding ${chunks.length} chunks...`);
+    
+    const insertStmt = sqlite.prepare(`
+        INSERT OR REPLACE INTO session_embeddings (chunk_id, embedding, context_content)
+        VALUES (?, ?, ?)
+    `);
+    
+    let success = 0;
+    let failed = 0;
+    
+    for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        
+        try {
+            // Build contextual content
+            const contextContent = buildContextualContent(chunk);
+            
+            // Generate embedding
+            const embedding = await generateEmbedding(contextContent);
+            
+            // Store as binary blob (Float32Array)
+            const buffer = Buffer.from(new Float32Array(embedding).buffer);
+            
+            insertStmt.run(chunk.id, buffer, contextContent);
+            success++;
+            
+            // Progress indicator
+            if ((i + 1) % 50 === 0 || i === chunks.length - 1) {
+                console.log(`  Progress: ${i + 1}/${chunks.length} (${success} embedded, ${failed} failed)`);
+            }
+            
+            // Rate limiting - small delay between requests
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+        } catch (error) {
+            console.error(`  Error embedding chunk ${chunk.id}: ${error.message}`);
+            failed++;
+        }
+    }
+    
+    sqlite.close();
+    
+    console.log(`\n✅ Embedding complete: ${success} success, ${failed} failed`);
 }
 
 async function healthCommand() {
@@ -633,6 +1070,14 @@ program
     .command('health')
     .description('Show health status of session memory system')
     .action(healthCommand);
+
+program
+    .command('embed')
+    .description('Generate embeddings for chunks')
+    .option('--all', 'Embed all unembedded chunks')
+    .option('--session <id>', 'Embed specific session')
+    .option('--force', 'Re-embed even if already embedded')
+    .action(embedCommand);
 
 if (require.main === module) {
     program.parse();
