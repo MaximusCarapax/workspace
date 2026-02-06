@@ -375,11 +375,72 @@ class SessionChunker {
         return chunks;
     }
     
-    async extractTopics(content) {
-        // Use simple keyword extraction (no external API dependencies)
-        // This is fast, free, and reliable
+    async extractTopics(content, useLLM = true) {
+        // Try LLM-based extraction first (via OpenRouter), fall back to keywords
+        if (useLLM && OPENROUTER_KEY) {
+            try {
+                const llmTopics = await this.extractTopicsLLM(content);
+                if (llmTopics && llmTopics.length > 0) {
+                    return llmTopics;
+                }
+            } catch (e) {
+                console.warn('LLM topic extraction failed, falling back to keywords:', e.message);
+            }
+        }
+        
+        // Fallback: simple keyword extraction
         const keywords = this.extractKeywords(content);
         return keywords.slice(0, 3); // Max 3 topics
+    }
+    
+    async extractTopicsLLM(content) {
+        // Use Gemini via OpenRouter for intelligent topic extraction
+        const prompt = `Extract 2-4 topic tags from this conversation chunk. Return ONLY a JSON array of short topic strings (1-3 words each). Focus on the main subjects discussed.
+
+Chunk:
+${content.substring(0, 1000)}
+
+Return format: ["topic1", "topic2", "topic3"]
+Topics:`;
+
+        try {
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${OPENROUTER_KEY}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': 'https://openclaw.ai',
+                    'X-Title': 'OpenClaw Topic Extraction'
+                },
+                body: JSON.stringify({
+                    model: 'google/gemini-2.5-flash-lite',
+                    messages: [{ role: 'user', content: prompt }],
+                    max_tokens: 50,
+                    temperature: 0.2
+                })
+            });
+
+            if (!response.ok) {
+                return null;
+            }
+
+            const data = await response.json();
+            const topicsText = data.choices?.[0]?.message?.content?.trim();
+            
+            if (!topicsText) return null;
+            
+            // Parse JSON array from response
+            const jsonMatch = topicsText.match(/\[.*\]/s);
+            if (jsonMatch) {
+                const topics = JSON.parse(jsonMatch[0]);
+                return topics.slice(0, 4).map(t => String(t).toLowerCase().trim());
+            }
+            
+            return null;
+        } catch (e) {
+            console.warn('Topic LLM error:', e.message);
+            return null;
+        }
     }
     
     extractKeywords(text) {
@@ -1210,6 +1271,22 @@ async function embedCommand(options) {
                     if (typeof textToEmbed !== 'string') {
                         textToEmbed = String(textToEmbed);
                     }
+                    
+                    // Check for corrupted/binary content (non-ASCII ratio > 50%)
+                    const nonAsciiCount = (textToEmbed.match(/[^\x00-\x7F]/g) || []).length;
+                    const nonAsciiRatio = nonAsciiCount / textToEmbed.length;
+                    if (nonAsciiRatio > 0.5) {
+                        console.warn(`Skipping chunk ${chunk.id} - appears corrupted (${Math.round(nonAsciiRatio * 100)}% non-ASCII)`);
+                        failed++;
+                        continue;
+                    }
+                    
+                    // Truncate to avoid token limits (8192 token limit, ~4 chars/token)
+                    if (textToEmbed.length > 30000) {
+                        console.warn(`Truncating chunk ${chunk.id} from ${textToEmbed.length} to 30000 chars`);
+                        textToEmbed = textToEmbed.substring(0, 30000);
+                    }
+                    
                     const embedding = await embeddingGenerator.generateEmbedding(textToEmbed);
                     
                     // Convert embedding to Buffer for storage
@@ -1837,6 +1914,126 @@ async function backfillContextCommand(options) {
     }
 }
 
+async function backfillTopicsCommand(options) {
+    const batchSize = parseInt(options.batch) || 100;
+    
+    console.log('🏷️  Backfilling LLM-generated topic tags...\n');
+    
+    if (!OPENROUTER_KEY) {
+        console.error('Error: OPENROUTER_API_KEY not found in environment');
+        process.exit(1);
+    }
+    
+    try {
+        const Database = require('better-sqlite3');
+        const dbPath = path.join(process.env.HOME, '.openclaw/data/agent.db');
+        const sqlite = new Database(dbPath);
+        
+        // Find chunks that could benefit from better topics (have generic keyword-style topics)
+        // We'll look for chunks where topic_tags is very short or looks like single words
+        const pendingChunks = sqlite.prepare(`
+            SELECT id, content, topic_tags 
+            FROM session_chunks 
+            WHERE content IS NOT NULL 
+            AND LENGTH(content) > 100
+            ORDER BY id DESC
+            LIMIT ?
+        `).all(batchSize);
+        
+        if (pendingChunks.length === 0) {
+            console.log('✓ No chunks to process.');
+            sqlite.close();
+            return;
+        }
+        
+        console.log(`Processing ${pendingChunks.length} chunks...\n`);
+        
+        const updateStmt = sqlite.prepare(`
+            UPDATE session_chunks SET topic_tags = ? WHERE id = ?
+        `);
+        
+        let updated = 0;
+        let failed = 0;
+        
+        for (let i = 0; i < pendingChunks.length; i++) {
+            const chunk = pendingChunks[i];
+            
+            try {
+                const prompt = `Extract 2-4 topic tags from this conversation chunk. Return ONLY a JSON array of short topic strings (1-3 words each). Focus on the main subjects discussed.
+
+Chunk:
+${chunk.content.substring(0, 1000)}
+
+Return format: ["topic1", "topic2", "topic3"]
+Topics:`;
+
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${OPENROUTER_KEY}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://openclaw.ai',
+                        'X-Title': 'OpenClaw Topic Extraction'
+                    },
+                    body: JSON.stringify({
+                        model: 'google/gemini-2.5-flash-lite',
+                        messages: [{ role: 'user', content: prompt }],
+                        max_tokens: 50,
+                        temperature: 0.2
+                    })
+                });
+
+                if (!response.ok) {
+                    failed++;
+                    continue;
+                }
+
+                const data = await response.json();
+                const topicsText = data.choices?.[0]?.message?.content?.trim();
+                
+                if (topicsText) {
+                    const jsonMatch = topicsText.match(/\[.*\]/s);
+                    if (jsonMatch) {
+                        const topics = JSON.parse(jsonMatch[0]);
+                        const topicString = JSON.stringify(topics.slice(0, 4).map(t => String(t).toLowerCase().trim()));
+                        
+                        updateStmt.run(topicString, chunk.id);
+                        updated++;
+                    } else {
+                        failed++;
+                    }
+                } else {
+                    failed++;
+                }
+                
+            } catch (e) {
+                failed++;
+            }
+            
+            // Progress
+            if ((i + 1) % 10 === 0 || i === pendingChunks.length - 1) {
+                process.stdout.write(`\rProgress: ${i + 1}/${pendingChunks.length} (${updated} updated, ${failed} failed)`);
+            }
+            
+            // Rate limiting
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        console.log('\n');
+        console.log(`📊 Backfill Results:`);
+        console.log(`  Processed: ${pendingChunks.length}`);
+        console.log(`  Updated: ${updated}`);
+        console.log(`  Failed: ${failed}`);
+        console.log(`  Cost: ~$${(updated * 0.00001).toFixed(4)}`);
+        
+        sqlite.close();
+        
+    } catch (error) {
+        console.error('Error during topic backfill:', error.message);
+        process.exit(1);
+    }
+}
+
 async function healthCommand() {
     try {
         const Database = require('better-sqlite3');
@@ -1945,6 +2142,12 @@ program
     .option('--no-rerank', 'Skip Cohere reranking')
     .option('--expand', 'Expand query with variations for better recall')
     .action(searchCommand);
+
+program
+    .command('backfill-topics')
+    .description('Generate LLM-based topic tags for existing chunks')
+    .option('--batch <n>', 'Number of chunks to process (default: 100)', '100')
+    .action(backfillTopicsCommand);
 
 if (require.main === module) {
     program.parse();
