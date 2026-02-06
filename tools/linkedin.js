@@ -37,10 +37,33 @@ try {
 }
 
 async function getBrowser() {
-  return await chromium.launch({ 
+  const launchOptions = { 
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+  };
+  
+  // Use Tailscale SOCKS proxy if available (residential IP for LinkedIn)
+  // Always try Tailscale first, fall back to direct
+  const proxyUrl = process.env.LINKEDIN_PROXY || process.env.ALL_PROXY || 'socks5://localhost:1055';
+  try {
+    const net = require('net');
+    const proxyHost = proxyUrl.replace(/^socks5?:\/\//, '').split(':')[0];
+    const proxyPort = parseInt(proxyUrl.split(':').pop());
+    // Quick check if proxy is reachable
+    await new Promise((resolve, reject) => {
+      const s = net.createConnection(proxyPort, proxyHost);
+      s.setTimeout(1000);
+      s.on('connect', () => { s.destroy(); resolve(); });
+      s.on('error', reject);
+      s.on('timeout', () => { s.destroy(); reject(new Error('timeout')); });
+    });
+    launchOptions.proxy = { server: proxyUrl };
+    console.log('🌐 Using Tailscale proxy for residential IP');
+  } catch (e) {
+    console.log('⚠️  No proxy available, using direct connection');
+  }
+  
+  return await chromium.launch(launchOptions);
 }
 
 async function getPage(browser) {
@@ -69,7 +92,7 @@ async function login(page) {
   
   await page.goto('https://www.linkedin.com/login', { waitUntil: 'domcontentloaded' });
   
-  const email = credentials.linkedin?.email || 'maximuscarapax@gmail.com';
+  const email = credentials.linkedin?.email || 'maximuscarapax@proton.me';
   const password = credentials.linkedin?.password;
   
   if (!password) {
@@ -84,8 +107,29 @@ async function login(page) {
   await page.waitForTimeout(3000);
   
   if (page.url().includes('challenge') || page.url().includes('checkpoint')) {
-    console.error('❌ LinkedIn security challenge detected. Need manual login.');
-    process.exit(1);
+    console.log('🔒 Security challenge detected. Checking for PIN input...');
+    
+    // Check if there's a PIN/code input field
+    const pinInput = await page.$('input[name="pin"]') || await page.$('input#input__email_verification_pin');
+    if (pinInput && process.env.LINKEDIN_PIN) {
+      console.log(`📝 Entering verification code: ${process.env.LINKEDIN_PIN}`);
+      await pinInput.fill(process.env.LINKEDIN_PIN);
+      const submitBtn = await page.$('button[type="submit"]') || await page.$('button#email-pin-submit-button');
+      if (submitBtn) await submitBtn.click();
+      await page.waitForTimeout(3000);
+      
+      if (!page.url().includes('challenge') && !page.url().includes('checkpoint')) {
+        console.log('✅ Verification passed!');
+      } else {
+        console.error('❌ Verification failed. Code may be wrong or expired.');
+        process.exit(1);
+      }
+    } else {
+      // Take screenshot for debugging
+      await page.screenshot({ path: '/tmp/linkedin-challenge.png' });
+      console.error('❌ LinkedIn security challenge detected. Set LINKEDIN_PIN env var or check /tmp/linkedin-challenge.png');
+      process.exit(1);
+    }
   }
   
   await saveCookies(page.context());

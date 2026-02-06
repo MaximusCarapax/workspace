@@ -53,6 +53,34 @@ Real-time capture of process problems, bugs, and annoyances. Reviewed weekly.
 **Fix:** Wrote the code directly myself instead
 **Lesson:** Sub-agent + aider combo doesn't work for complex tasks. Options: (1) I drive aider directly with smaller steps, (2) skip aider and write code directly, (3) sub-agents use simpler tools. The overhead of aider's verbose output is brutal in a sub-agent context.
 
+### 2026-02-06 — Hume voice agent parroting loop
+**Context:** Outbound call to Kevin via Hume EVI
+**Friction:** Max kept repeating back what Kevin said as "So you're asking..." instead of conversing. Kevin roasted him.
+**Impact:** Major — call was useless, made us look bad
+**Fix:** Rewrote prompt (no parroting rules), switched from Hume Native LLM to Gemini 2.5 Flash
+**Lesson:** Hume's native LLM is too dumb for real conversations. Always use a real LLM (Gemini/Claude).
+
+### 2026-02-06 — Hume transcript API response keys wrong
+**Context:** Auto-transcript retrieval after calls
+**Friction:** Script looked for `data.chats` but API returns `data.chats_page`. Same for events.
+**Impact:** Moderate — transcripts silently failed to retrieve
+**Fix:** Updated to check `chats_page || chats` and use single-chat endpoint for events
+**Lesson:** Always check actual API response shape, not assume from docs.
+
+### 2026-02-06 — Calendar timezone bug (UTC vs Melbourne)
+**Context:** Created calendar event after voice call booking
+**Friction:** "12pm playdate" showed as 11pm on Jason's phone. `new Date()` parsed naive datetime as UTC, then `toISOString()` sent it as UTC. TimeZone field was cosmetic only.
+**Impact:** Major — wrong time on calendar
+**Fix:** Pass raw datetime string without Date() conversion, let Google interpret with timeZone field
+**Lesson:** Never use `new Date(naiveString).toISOString()` when you mean local time. Server is UTC.
+
+### 2026-02-06 — Hume config PATCH vs POST confusion
+**Context:** Trying to update Hume EVI config prompt
+**Friction:** PATCH returned `1` but didn't create new version. POST (create new version) was the correct method.
+**Impact:** Minor — wasted time debugging
+**Fix:** Use POST to `/v0/evi/configs/{id}` to create new versions
+**Lesson:** Hume configs are versioned — PATCH doesn't seem to work, POST creates a new version.
+
 ---
 
 *Add new entries at the bottom. Review weekly on Sunday.*
