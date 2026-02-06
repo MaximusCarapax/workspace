@@ -110,9 +110,74 @@ ORDER BY created_at DESC;
 | Parse failure | "No valid observations" | Check debug output for raw response |
 | Session memory error | "Session search failed" | Ensure chunks are indexed |
 
+## Feedback Digest Integration
+
+After observations are generated, send a digest to Telegram for feedback:
+
+### Sending the Digest
+
+```bash
+# Preview what would be sent
+node tools/send-observation-digest.js --dry-run
+
+# Send digest (outputs JSON for agent to process)
+node tools/send-observation-digest.js
+```
+
+The digest script outputs JSON with messages and inline buttons:
+- Each observation gets its own message
+- Buttons: 👍 Useful, 👎 Not Useful
+- Callback data format: `obs_feedback:<id>:useful|not_useful`
+
+### Handling Feedback Callbacks
+
+When a user clicks a button, handle the callback:
+
+```bash
+# Parse and process callback
+node tools/handle-observation-feedback.js "obs_feedback:123:useful"
+
+# Direct update
+node tools/handle-observation-feedback.js update 123 useful "Optional note"
+
+# View stats
+node tools/handle-observation-feedback.js stats
+
+# List observations
+node tools/handle-observation-feedback.js list --feedback pending
+node tools/handle-observation-feedback.js list --feedback useful
+```
+
+### Automated Flow
+
+1. **Weekly cron** runs `weekly-self-observation.js` (Sunday 6pm Melbourne)
+2. **Main agent** or cron triggers `send-observation-digest.js`
+3. **Digest sent** to Telegram with inline buttons
+4. **User clicks** button → callback received
+5. **Agent processes** callback with `handle-observation-feedback.js`
+6. **Confirmation** sent back to user
+
+### Example Integration (for main agent)
+
+```javascript
+// When receiving a message that looks like a callback
+if (message.startsWith('obs_feedback:')) {
+  const { handleFeedback, parseCallbackData, getConfirmationMessage } = 
+    require('./tools/handle-observation-feedback');
+  
+  const parsed = parseCallbackData(message);
+  if (parsed && !parsed.error) {
+    const result = handleFeedback(parsed.id, parsed.feedback);
+    // Send confirmation message to user
+    return getConfirmationMessage(result);
+  }
+}
+```
+
 ## Related
 
 - Feature spec: `specs/self-observation-system.md`
-- Story: Pipeline #1932
+- Story: Pipeline #1932, #1936
 - Helper functions: `lib/self-observation.js`
 - Database schema: `self_observations` table in `lib/db.js`
+- Feedback tools: `tools/send-observation-digest.js`, `tools/handle-observation-feedback.js`
