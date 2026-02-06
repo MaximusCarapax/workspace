@@ -58,6 +58,9 @@ const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 // Store active sessions
 const activeSessions = new Map();
 
+// Store pending call context (keyed by toNumber, consumed when call starts)
+const pendingCallContext = new Map();
+
 // Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -147,17 +150,21 @@ class AudioConverter {
  * Session manager for Twilio-Hume bridge connections
  */
 class BridgeSession {
-    constructor(twilioWs, callSid) {
+    constructor(twilioWs, callSid, callContext = null) {
         this.twilioWs = twilioWs;
         this.callSid = callSid;
         this.humeWs = null;
         this.streamSid = null;
         this.isActive = true;
+        this.callContext = callContext; // Context to inject into Hume session
         
         this.setupTwilioHandlers();
         this.connectToHume();
         
         console.log(`🔗 Session created for call ${callSid}`);
+        if (callContext) {
+            console.log(`📋 Call context loaded: calling ${callContext.name} for "${callContext.purpose || 'general check-in'}"`);
+        }
     }
     
     setupTwilioHandlers() {
@@ -188,6 +195,11 @@ class BridgeSession {
             
             this.humeWs.on('open', () => {
                 console.log(`🧠 Connected to Hume EVI for call ${this.callSid}`);
+                
+                // Inject call context via session_settings
+                if (this.callContext) {
+                    this.injectCallContext();
+                }
             });
             
             this.humeWs.on('message', (message) => {
@@ -325,6 +337,65 @@ class BridgeSession {
         }
     }
     
+    /**
+     * Inject call context into Hume session via session_settings message
+     */
+    injectCallContext() {
+        if (!this.callContext || !this.humeWs || this.humeWs.readyState !== WebSocket.OPEN) {
+            return;
+        }
+        
+        const ctx = this.callContext;
+        
+        // Build system prompt with call context
+        const contextualPrompt = `You are Max, Jason's AI assistant. You're making an outbound call.
+
+IMPORTANT CALL CONTEXT:
+- You are calling on behalf of: Jason Wu
+- Person you're calling: ${ctx.name || 'Unknown'}
+- Relationship: ${ctx.relationship || 'Unknown'}
+- Purpose of this call: ${ctx.purpose || 'General check-in'}
+${ctx.topics && ctx.topics.length > 0 ? `- Suggested topics: ${ctx.topics.join(', ')}` : ''}
+${ctx.history && ctx.history.length > 0 ? `- Recent context: ${ctx.history.slice(0, 3).join('; ')}` : ''}
+
+CALL GUIDELINES:
+1. Start by greeting them naturally and identifying yourself: "Hey ${ctx.name || 'there'}, it's Max calling on behalf of Jason."
+2. Briefly explain why you're calling (the purpose above)
+3. Be conversational and friendly, not robotic
+4. If they ask who you are: "I'm Max, Jason's AI assistant. He asked me to reach out."
+5. Keep the call focused but natural
+6. If they're busy or it's a bad time, offer to call back later
+
+VOICEMAIL GUIDELINES:
+If you reach voicemail or the person doesn't answer:
+1. Leave a brief, friendly message
+2. Identify yourself: "Hey ${ctx.name || 'there'}, this is Max calling on behalf of Jason"
+3. State the purpose briefly
+4. End with: "Give Jason a call back when you get a chance, or I can try again later"
+5. Then hang up (use the hang_up tool)
+
+Be warm, helpful, and represent Jason well.`;
+
+        // Send session_settings message
+        const sessionSettings = {
+            type: 'session_settings',
+            system_prompt: contextualPrompt,
+            context: {
+                text: `This is an outbound call to ${ctx.name}. Purpose: ${ctx.purpose || 'check-in'}. Calling on behalf of Jason Wu.`,
+                type: 'persistent'
+            },
+            variables: {
+                name: ctx.name || 'there',
+                purpose: ctx.purpose || 'checking in',
+                caller: 'Jason Wu'
+            }
+        };
+        
+        console.log(`📋 Injecting call context for ${ctx.name}...`);
+        this.humeWs.send(JSON.stringify(sessionSettings));
+        console.log(`✅ Call context injected into Hume session`);
+    }
+    
     async hangUpCall() {
         try {
             console.log(`📞 Terminating call ${this.callSid}...`);
@@ -394,6 +465,115 @@ app.post('/voice/incoming', (req, res) => {
 });
 
 /**
+ * API endpoint to make outbound calls with context
+ * POST /call/outbound
+ * Body: { to: "+61...", name: "Kevin", purpose: "Check if coming over", relationship: "friend" }
+ */
+app.post('/call/outbound', async (req, res) => {
+    const { to, name, purpose, relationship, topics, history } = req.body;
+    
+    if (!to) {
+        return res.status(400).json({ error: 'Missing required field: to (phone number)' });
+    }
+    
+    console.log(`📞 Outbound call request: ${name || 'Unknown'} at ${to}`);
+    console.log(`   Purpose: ${purpose || 'general check-in'}`);
+    
+    // Store context for this call (keyed by phone number, will be matched when call connects)
+    const callContext = {
+        name: name || 'there',
+        purpose: purpose || null,
+        relationship: relationship || null,
+        topics: topics || [],
+        history: history || [],
+        createdAt: Date.now()
+    };
+    
+    pendingCallContext.set(to, callContext);
+    
+    // Also store by normalized number (remove spaces, dashes)
+    const normalizedTo = to.replace(/[\s\-\(\)]/g, '');
+    if (normalizedTo !== to) {
+        pendingCallContext.set(normalizedTo, callContext);
+    }
+    
+    try {
+        // Make outbound call via Twilio, pointing to our own webhook
+        const baseUrl = req.protocol + '://' + req.get('host');
+        
+        const call = await twilioClient.calls.create({
+            to: to,
+            from: TWILIO_PHONE_NUMBER,
+            url: `${baseUrl}/voice/outbound?name=${encodeURIComponent(name || '')}&purpose=${encodeURIComponent(purpose || '')}`,
+            statusCallback: `${baseUrl}/call/status`,
+            statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
+        });
+        
+        console.log(`✅ Call initiated: ${call.sid}`);
+        
+        res.json({
+            success: true,
+            callSid: call.sid,
+            to: to,
+            name: name,
+            purpose: purpose,
+            status: call.status
+        });
+        
+    } catch (error) {
+        console.error(`❌ Failed to initiate call:`, error.message);
+        
+        // Clean up pending context
+        pendingCallContext.delete(to);
+        pendingCallContext.delete(normalizedTo);
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Twilio webhook for outbound calls (with context)
+ */
+app.post('/voice/outbound', (req, res) => {
+    const callSid = req.body.CallSid;
+    const to = req.body.To;
+    const name = req.query.name || '';
+    const purpose = req.query.purpose || '';
+    
+    console.log(`📞 Outbound call connected: ${to} (${callSid})`);
+    
+    // Generate TwiML to connect to our media stream
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Connect>
+        <Stream url="wss://${req.get('host')}/media-stream?to=${encodeURIComponent(to)}&amp;name=${encodeURIComponent(name)}&amp;purpose=${encodeURIComponent(purpose)}"/>
+    </Connect>
+</Response>`;
+    
+    res.type('text/xml');
+    res.send(twiml);
+});
+
+/**
+ * Call status callback
+ */
+app.post('/call/status', (req, res) => {
+    const { CallSid, CallStatus, To, Duration } = req.body;
+    console.log(`📊 Call ${CallSid} status: ${CallStatus}${Duration ? ` (${Duration}s)` : ''}`);
+    
+    // Clean up pending context when call completes
+    if (CallStatus === 'completed' || CallStatus === 'failed' || CallStatus === 'canceled') {
+        pendingCallContext.delete(To);
+        pendingCallContext.delete(To.replace(/[\s\-\(\)]/g, ''));
+    }
+    
+    res.sendStatus(200);
+});
+
+/**
  * Health check endpoint
  */
 app.get('/health', (req, res) => {
@@ -454,6 +634,12 @@ const wss = new WebSocket.Server({
 wss.on('connection', (ws, req) => {
     console.log('🔌 New WebSocket connection from Twilio');
     
+    // Extract context from query params if present (for outbound calls)
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const queryTo = url.searchParams.get('to');
+    const queryName = url.searchParams.get('name');
+    const queryPurpose = url.searchParams.get('purpose');
+    
     let callSid = null;
     
     // Wait for the first message to get call info
@@ -465,8 +651,35 @@ wss.on('connection', (ws, req) => {
                 callSid = data.start.callSid;
                 console.log(`🔗 Creating bridge session for call ${callSid}`);
                 
-                // Create new bridge session
-                const session = new BridgeSession(ws, callSid);
+                // Look up call context
+                let callContext = null;
+                
+                // First try pending context by phone number
+                const toNumber = queryTo || data.start.customParameters?.to;
+                if (toNumber) {
+                    callContext = pendingCallContext.get(toNumber);
+                    if (callContext) {
+                        console.log(`📋 Found pending context for ${toNumber}`);
+                        // Clean up pending context
+                        pendingCallContext.delete(toNumber);
+                        pendingCallContext.delete(toNumber.replace(/[\s\-\(\)]/g, ''));
+                    }
+                }
+                
+                // If no pending context but we have query params, build context from those
+                if (!callContext && (queryName || queryPurpose)) {
+                    callContext = {
+                        name: queryName || 'there',
+                        purpose: queryPurpose || null,
+                        relationship: null,
+                        topics: [],
+                        history: []
+                    };
+                    console.log(`📋 Built context from query params: ${queryName}, purpose: ${queryPurpose}`);
+                }
+                
+                // Create new bridge session with context
+                const session = new BridgeSession(ws, callSid, callContext);
                 activeSessions.set(callSid, session);
             }
         } catch (error) {

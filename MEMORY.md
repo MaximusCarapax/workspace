@@ -93,6 +93,13 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - Need Jason's help for account creation that requires CAPTCHA
 - Browser 2FA could give me independence (2! Authenticator extension)
 
+## Running Model: Claude Opus 4.6
+- Upgraded 2026-02-06 from Opus 4.5
+- Features: 1M context window, agent teams, effort controls, 128k output
+- Pricing: $5/$25 per M tokens (same as 4.5)
+- Config: Defined manually in `models.providers.anthropic.models[]` — OpenClaw registry didn't have it
+- Key lesson: For day-zero model access, define in config under `models.providers` to bypass built-in registry
+
 ## ElevenLabs Conversational AI
 - **Agent ID:** agent_5101kghqpcgsfpfs9r4s1q43thza
 - **Phone:** +1 (820) 900-4002 connected to ElevenLabs
@@ -109,11 +116,18 @@ Jason wants freedom from life's mundane burdens. I help build systems to handle 
 - AU number pending (Twilio reg bundle approval)
 - Set up webhook to receive incoming SMS
 
-## Bird CLI (X/Twitter without API costs)
-- Installed: `npm install -g @steipete/bird`
-- Uses browser cookies for auth (AUTH_TOKEN, CT0)
-- Reading/mentions works, writes need Tailscale routing
-- Cookies stored in .env (AUTH_TOKEN, CT0)
+## X/Twitter Posting
+- **Writes:** Use X API v2 with OAuth 1.0a (keys in .env: X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET)
+- **Reads:** Bird CLI (cookie-based, free, no quota)
+- **Free tier:** 500 posts/month
+- **Key lesson:** Bird CLI cookies get blocked by automation detection; OAuth API does NOT — always use API for writes
+- **Tailscale available** for residential IP routing if needed (exit node through Jason's PC)
+
+## Tailscale
+- Installed on server (v1.94.1), userspace-networking mode
+- SOCKS5 proxy: localhost:1055 → routes through Jason's residential IP (122.150.189.87)
+- Exit node: `desktop-kamlgml` (Jason's Windows PC)
+- ⚠️ Doesn't persist across container restarts — needs manual restart
 
 ## Content Pipeline
 - `tools/insights.js` - Capture insights from daily work

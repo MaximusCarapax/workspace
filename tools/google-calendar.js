@@ -308,8 +308,21 @@ async function checkAvailability(startTime, endTime) {
  * Create a new calendar event
  */
 async function createEvent(title, startDateTime, durationMinutes = 60, description = '', attendeeEmail = '') {
-  const startTime = new Date(startDateTime);
-  const endTime = new Date(startTime.getTime() + (durationMinutes * 60 * 1000));
+  // Parse start time — keep it as Melbourne local time (don't convert to UTC)
+  const startStr = startDateTime.includes('+') || startDateTime.endsWith('Z') 
+    ? startDateTime  // Already has timezone info
+    : startDateTime; // Naive datetime — will be interpreted as Melbourne via timeZone field
+  
+  // Calculate end time by parsing and adding duration
+  // Use a regex to avoid Date() converting to UTC
+  const startParts = startDateTime.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  let endStr = startStr;
+  if (startParts) {
+    const [, y, mo, d, h, mi, s] = startParts.map(Number);
+    const endDate = new Date(y, mo - 1, d, h, mi + durationMinutes, s);
+    const pad = (n) => String(n).padStart(2, '0');
+    endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:${pad(endDate.getSeconds())}`;
+  }
   
   // Prefix Max-created events
   const eventTitle = title.startsWith('[Max]') ? title : `[Max] ${title}`;
@@ -318,12 +331,12 @@ async function createEvent(title, startDateTime, durationMinutes = 60, descripti
     summary: eventTitle,
     description: description || '',
     start: {
-      dateTime: startTime.toISOString(),
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      dateTime: startStr,
+      timeZone: 'Australia/Melbourne'
     },
     end: {
-      dateTime: endTime.toISOString(),
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      dateTime: endStr,
+      timeZone: 'Australia/Melbourne'
     }
   };
   
@@ -388,11 +401,11 @@ async function updateEvent(eventId, updates = {}) {
       
       eventBody.start = {
         dateTime: startTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        timeZone: 'Australia/Melbourne'
       };
       eventBody.end = {
         dateTime: endTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        timeZone: 'Australia/Melbourne'
       };
     } else if (updates.durationMinutes !== undefined) {
       // Update duration only
@@ -400,7 +413,7 @@ async function updateEvent(eventId, updates = {}) {
       const endTime = new Date(startTime.getTime() + (updates.durationMinutes * 60 * 1000));
       eventBody.end = {
         dateTime: endTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        timeZone: 'Australia/Melbourne'
       };
     }
     

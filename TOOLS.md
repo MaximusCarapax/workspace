@@ -451,20 +451,36 @@ node tools/voice-agent-call.js list                          # Recent calls
 ### Configs
 | Name | ID | LLM | Status |
 |------|-----|-----|--------|
-| max-gemini-25 | cc7579f9-a0a1-4dd0-bacc-62971d333de4 | Gemini 2.5 Flash | ✅ Working |
+| max-hume-native | 9b067366-25ac-4bb0-9511-9203ec787ded | Hume Native | ✅ Working (dumb — parrots) |
+| max-gemini-25 | cc7579f9-a0a1-4dd0-bacc-62971d333de4 | Gemini 2.5 Flash | ✅ Working (default) |
 | max-outbound-v2 | 5dbca521-f55a-44ec-91b5-cba75fc4874c | Hume Default | ✅ Working |
 | max-gemini | 3244cfd6-20cf-4355-9eb9-754eeaae7fb6 | Gemini 2.0 Flash | ✅ Working |
 | max-gemini-lite | 8f184d1d-8ee8-4c22-9f66-76af25bb44b3 | Gemini 2.5 Flash Lite | ❌ Failed |
 | max-outbound | 1307331d-531b-4898-9777-4b8807e35efe | Claude 3.5 Sonnet | ❌ Failed |
 
-### Outbound Calls with Auto-Transcript
+### Outbound Calls with Context Injection ⭐
 ```bash
-node tools/hume-call.js <number> [name]           # Call someone (with auto-transcript)
-node tools/hume-call.js +61429512420 "Jason"      # Example with auto-transcript
+# Start bridge server first (for context-aware calls)
+node tools/hume-twilio-bridge.js 3000
+ngrok http 3000  # Expose for Twilio (update webhook URL)
+
+# Make calls with context
+node tools/hume-call.js <number> <name> <purpose>
+node tools/hume-call.js +61429512420 "Kevin" "Check if coming over tomorrow"
+node tools/hume-call.js +61412345678 "Diana" "Birthday wishes"
+
+# Other commands
 node tools/hume-call.js status <callSid>          # Check call status
 node tools/hume-call.js transcript <chat_id>      # Fetch transcript by chat ID
 node tools/hume-call.js process <call_sid>        # Process transcript for completed call
 ```
+
+**Context Injection (via bridge):**
+- ✅ **Max knows who he's calling** - Name, relationship, purpose injected into session
+- ✅ **Max knows why** - Call purpose guides the conversation
+- ✅ **Voicemail guidelines** - Proper behavior if reaching voicemail
+- ✅ **History context** - RAG search adds recent mentions of the person
+- ⚠️ **Requires bridge running** - Without bridge, falls back to contextless calls
 
 **Auto-Transcript Features:**
 - ✅ **Waits for call completion** - Monitors call status automatically
