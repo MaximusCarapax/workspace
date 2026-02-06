@@ -1,0 +1,34 @@
+[
+  {
+    "timestamp": "2026-02-06T02:46:19.055Z",
+    "description": "Testing the friction capture tool",
+    "type": "friction",
+    "impact": "high",
+    "category": "workflow",
+    "suggested_fix": null
+  },
+  {
+    "timestamp": "2026-02-06T02:46:22.565Z",
+    "description": "Need better autocomplete in editor",
+    "type": "friction",
+    "impact": "medium",
+    "category": "ux",
+    "suggested_fix": null
+  },
+  {
+    "timestamp": "2026-02-06T02:46:25.528Z",
+    "description": "Add voice commands for common operations",
+    "type": "idea",
+    "impact": "low",
+    "category": "ux",
+    "suggested_fix": null
+  },
+  {
+    "timestamp": "2026-02-06T02:47:43.940Z",
+    "description": "CLI commands take too long to show help text",
+    "type": "friction",
+    "impact": "medium",
+    "category": "performance",
+    "suggested_fix": "Use lazy loading for command descriptions"
+  }
+]

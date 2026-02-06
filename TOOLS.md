@@ -457,12 +457,21 @@ node tools/voice-agent-call.js list                          # Recent calls
 | max-gemini-lite | 8f184d1d-8ee8-4c22-9f66-76af25bb44b3 | Gemini 2.5 Flash Lite | ❌ Failed |
 | max-outbound | 1307331d-531b-4898-9777-4b8807e35efe | Claude 3.5 Sonnet | ❌ Failed |
 
-### Outbound Calls
+### Outbound Calls with Auto-Transcript
 ```bash
-node tools/hume-call.js <number> [name]           # Call someone
-node tools/hume-call.js +61429512420 "Jason"      # Example
+node tools/hume-call.js <number> [name]           # Call someone (with auto-transcript)
+node tools/hume-call.js +61429512420 "Jason"      # Example with auto-transcript
 node tools/hume-call.js status <callSid>          # Check call status
+node tools/hume-call.js transcript <chat_id>      # Fetch transcript by chat ID
+node tools/hume-call.js process <call_sid>        # Process transcript for completed call
 ```
+
+**Auto-Transcript Features:**
+- ✅ **Waits for call completion** - Monitors call status automatically
+- ✅ **Fetches Hume transcript** - Uses Hume API to get conversation history
+- ✅ **Indexes to RAG** - Automatically calls `index-call.js` to index transcript
+- ✅ **Returns summary** - Provides call outcome and key insights
+- ✅ **Chat ID matching** - Finds corresponding Hume chat by timing correlation
 
 **Inbound calls:** Call +61 468 089 420, Hume EVI answers as Max.
 

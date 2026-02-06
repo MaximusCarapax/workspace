@@ -168,3 +168,18 @@ For new builds, prefer modern over simple:
 - **Backend:** Express.js or Hono (lightweight)
 - **Avoid:** Plain HTML/CSS/JS, inline styles, no-framework approaches
 - **Why:** Better DX, component reuse, easier to maintain
+
+
+## Decision Patterns (Weekly)
+
+### 2026-W06
+You exhibit strong tendencies towards proactive system building and structured decision-making, motivated by self-improvement goals. A key growth area lies in consistently tracking the outcomes of your decisions, even those focused on system development. You might have a blind spot in clearly defining the success criteria for your conceptual 'self-model system'.
+
+Summary of my decision-making patterns:
+
+
+## Self-Observations (Promoted)
+
+- **[communication]** Test observation for feedback system _(2026-02-05, confidence: 75%)_
+- **[task_preference]** I tend to prefer coding tasks over documentation _(2026-02-05, confidence: 80%)_
+Patterns I've noticed about myself that were confirmed useful:

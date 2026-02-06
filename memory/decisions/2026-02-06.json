@@ -1,0 +1,71 @@
+[
+  {
+    "timestamp": "2026-02-06T02:36:33.694Z",
+    "context": "Testing the new decision logging system",
+    "decision": "Built a structured decision journal",
+    "alternatives_considered": [
+      "Quick notes in daily memory",
+      "no structured logging"
+    ],
+    "reasoning": "Need to track decision patterns for self-model system",
+    "outcome": "Successfully built and tested all 4 components of the self-model system. Tools are working and generating useful insights.",
+    "confidence": 0.9,
+    "tags": [
+      "testing",
+      "self-model",
+      "development"
+    ]
+  },
+  {
+    "timestamp": "2026-02-06T02:38:42.021Z",
+    "context": "Choosing the right AI model for pattern analysis",
+    "decision": "Used Gemini via OpenRouter instead of direct Gemini API",
+    "alternatives_considered": [
+      "Direct Gemini API calls",
+      "DeepSeek for text analysis"
+    ],
+    "reasoning": "OpenRouter avoids rate limits and provides more stable access",
+    "outcome": null,
+    "confidence": 0.8,
+    "tags": [
+      "ai-models",
+      "cost-optimization",
+      "reliability"
+    ]
+  },
+  {
+    "timestamp": "2026-02-06T02:38:46.767Z",
+    "context": "Debugging the self-model system components",
+    "decision": "Fixed module import paths and API model names",
+    "alternatives_considered": [
+      "Rewrite components from scratch",
+      "Use different tools entirely"
+    ],
+    "reasoning": "Components were failing due to incorrect relative paths and non-existent model endpoints",
+    "outcome": null,
+    "confidence": 0.95,
+    "tags": [
+      "debugging",
+      "system-architecture",
+      "problem-solving"
+    ]
+  },
+  {
+    "timestamp": "2026-02-06T03:00:13.329Z",
+    "context": "Jason observed I'm handling multi-message conversations better - not forgetting what I said, following up coherently",
+    "decision": "Log this as a self-observation to track improvement patterns over time",
+    "alternatives_considered": [
+      "Ignore it",
+      "Just say thanks"
+    ],
+    "reasoning": "External feedback about behavior is valuable for self-model. This is exactly what the system should capture.",
+    "outcome": null,
+    "confidence": 0.85,
+    "tags": [
+      "meta",
+      "self-awareness",
+      "external-feedback",
+      "improvement"
+    ]
+  }
+]
